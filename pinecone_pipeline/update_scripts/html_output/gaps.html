@@ -1,0 +1,315 @@
+<h1>Understanding gaps between high and low level code</h1>
+<p>The Certora Prover is analyzing low-level code, such as the EVM bytecode.
+However, the CVL specification as well as the Rule Report and Call Trace are 
+usually presenting information in terms of the high-level language (e.g., Solidity).</p>
+<p>In this document we describe how some of the gaps between the high-level source
+and the low-level bytecode can affect our understanding of the Prover's outputs,
+and recommended solutions.</p>
+<h2>Loops</h2>
+<h3>Determining the number of needed iterations</h3>
+<p>The Prover deals with loops by unrolling them a constant number of times 
+(see {ref}<code>--loop_iter</code>).
+Furthermore, it can add an assertion that the number of unrolled iterations
+was sufficient to fully capture all of the loop's behavior, which is usually useful
+in loops that are known to have a constant number of iterations.
+Otherwise, the user can opt-in to assume the unroll bound was sufficient
+(see {ref}<code>--optimistic_loop</code>).</p>
+<p>This approach works well for common simple loops such as:
+<code>solidity
+uint x;
+for (uint i = 0; i &lt; 3 ; i++) {
+    x++;
+}
+</code></p>
+<p><code>{note}
+For trivial loops such as the above, the Prover 
+automatically infers the required number of iterations is 3,
+even if a lower `--loop_iter` is provided.
+</code></p>
+<p>The natural loop condition determining whether we enter the body of the loop or exit
+is clearly <code>i &lt; 3</code>, thus 3 iterations are sufficient to fully unroll the loop and render
+the loop condition false.
+If <code>--loop_iter 3</code> is defined, the Prover unrolls the loop 3 times,
+and evaluates the loop exit condition one more time (a total of 4 evaluations of the loop exit condition).
+The resulting code would behave like the following Solidity snippet:
+<code>solidity
+uint x;
+uint i = 0;
+if (i &lt; 3) { // iteration #1
+    i++;
+    x++;
+    if (i &lt; 3) { // iteration #2
+        i++;
+        x++;
+        if (i &lt; 3) { // iteration #3
+            i++;
+            x++;
+            assert (i &lt; 3) // exit condition evaluation
+            // require(i &lt; 3) if `--optimistic_loop` is set
+        }
+    }
+}
+</code></p>
+<p>However, for less trivial cases, the definition is not so clear:
+<code>solidity
+uint x; // global state variable
+uint i = 0;
+while (true) {
+    x++; // if x overflows, we exit the loop and revert. But is this the loop condition?
+    if (i &gt;= 3) {
+        break;
+    }
+    i += 1;
+}
+</code></p>
+<p>Running the builtin sanity rule for the above code with <code>--loop_iter</code> of 2 or less
+results in sanity violation (can find no paths reaching the end of the loop), 
+as is expected.
+Sanity is passing with <code>--loop_iter 3</code>.</p>
+<p>However, running with <code>--loop_iter 3</code> actually shows 4 loop iterations
+in the Call Trace output. 
+The reason for that is that in cases the Prover cannot detect an exit condition
+in the loop's head, it unrolls one extra time to evaluate a potential exit condition 
+in the loop's body.
+In our case, the bytecode representation shows that the loop's head is ending with
+a non-conditional jump.
+The equivalent Solidity-like version of the unrolled code would look as follows, 
+(<code>c</code>-style <code>goto</code> and <code>label</code> commands were added for clarity):
+```solidity
+uint x; // global state variable
+uint i = 0;
+// iteration #1
+x++;
+if (i &gt;= 3) {
+    goto after<em>original</em>while<em>loop</em>end;
+}
+i += 1;</p>
+<p>// iteration #2
+x++;
+if (i &gt;= 3) {
+    goto after<em>original</em>while<em>loop</em>end;
+}
+i += 1;</p>
+<p>// iteration #3
+x++;
+if (i &gt;= 3) {
+    goto after<em>original</em>while<em>loop</em>end;
+}
+i += 1;</p>
+<p>// iteration #4
+x++;
+if (i &gt;= 3) {
+    goto after<em>original</em>while<em>loop</em>end;
+}
+i += 1;</p>
+<p>assert(false); // require(false) if <code>--optimistic_loop</code> is set</p>
+<p>after<em>original</em>while<em>loop</em>end: ...
+```</p>
+<p>In the next example, we show how two different compilations of the same code 
+lead to different behaviors of the unroller.</p>
+<h3>First low-level conditional branch is used for unrolling</h3>
+<p>The following examples show how the same code can generate different bytecodes
+in different versions of the Solidity compiler, in a way that affects the Prover's behavior.</p>
+<p>Consider
+```solidity
+import "./Other.sol";</p>
+<p>contract Loops {
+  uint x;
+  Other other;
+  function loop() external {
+    for (int i = 0 ; other.cond(i) ; i++) {
+      x++;
+    }
+  }
+}
+```</p>
+<p>where the <code>Other</code> contract is defined as:
+<code>solidity
+contract Other {
+  function cond(int i) external returns (bool) {
+    return i &lt; 3;
+  }
+}
+</code></p>
+<p>Considering the behavior of both contracts (by linking <code>--link Loops:other=Other</code>), we would assume that 3 iterations are sufficient:
+we increment <code>i</code> three times, and then evaluate the loop-exit condition <code>other.cond(3)</code> 
+which then evaluates to false. </p>
+<p>If the contract is compiled with <code>solc</code> version 0.8.18 and without optimizations,
+this is exactly the behavior that we get. 
+The sanity rule will succeed with just 3 iterations (<code>--loop_iter 3</code>).</p>
+<p>However, if we compiled the same code with <code>solc</code> version 0.7.6, we note that
+sanity fails for 3 iterations, and succeeds with 4 iterations.
+The reason for that is that in <code>solc7.6</code>, the first condition checked in the loop's head
+is that the <code>extcodesize</code> value of <code>other</code> is greater than zero, and this is considered the 
+loop exit condition.
+Therefore, with <code>--loop_iter 3</code>, the Prover is running 3 iterations of the loop,
+and one more check that <code>extcodesize(other) &gt; 0</code>, which trivially evaluates to true.
+One extra loop iteration is required to reach the actual code checking the value of <code>i</code> 
+in <code>other</code>, and indeed with <code>--loop_iter 4</code> the sanity rule passes.</p>
+<p>Of course, the user is not expected to be aware of such delicacies in
+how Solidity contracts are compiled. 
+It is therefore recommended to ensure the chosen <code>--loop_iter</code> configuration
+is sufficient both by running the basic sanity rule, 
+and if loops appear only under certain conditions, 
+to write specialized sanity rules that force the Prover to reason about these 
+particular code paths.
+Mutation testing can also be useful here.</p>
+<html><head><meta content="https://github.com/Certora/Documentation/blob/master/user-guide/gaps.md" name="url"/><meta content="No Title Found" name="title"/><meta content="Understanding gaps between high and low level code
+The Certora Prover is analyzing low-level code, such as the EVM bytecode.
+However, the CVL specification as well as the Rule Report and Call Trace ar" name="text"/></head><body><h1>Understanding gaps between high and low level code</h1>
+<p>The Certora Prover is analyzing low-level code, such as the EVM bytecode.
+However, the CVL specification as well as the Rule Report and Call Trace are 
+usually presenting information in terms of the high-level language (e.g., Solidity).</p>
+<p>In this document we describe how some of the gaps between the high-level source
+and the low-level bytecode can affect our understanding of the Prover's outputs,
+and recommended solutions.</p>
+<h2>Loops</h2>
+<h3>Determining the number of needed iterations</h3>
+<p>The Prover deals with loops by unrolling them a constant number of times 
+(see {ref}<code>--loop_iter</code>).
+Furthermore, it can add an assertion that the number of unrolled iterations
+was sufficient to fully capture all of the loop's behavior, which is usually useful
+in loops that are known to have a constant number of iterations.
+Otherwise, the user can opt-in to assume the unroll bound was sufficient
+(see {ref}<code>--optimistic_loop</code>).</p>
+<p>This approach works well for common simple loops such as:
+<code>solidity
+uint x;
+for (uint i = 0; i &lt; 3 ; i++) {
+    x++;
+}
+</code></p>
+<p><code>{note}
+For trivial loops such as the above, the Prover 
+automatically infers the required number of iterations is 3,
+even if a lower `--loop_iter` is provided.
+</code></p>
+<p>The natural loop condition determining whether we enter the body of the loop or exit
+is clearly <code>i &lt; 3</code>, thus 3 iterations are sufficient to fully unroll the loop and render
+the loop condition false.
+If <code>--loop_iter 3</code> is defined, the Prover unrolls the loop 3 times,
+and evaluates the loop exit condition one more time (a total of 4 evaluations of the loop exit condition).
+The resulting code would behave like the following Solidity snippet:
+<code>solidity
+uint x;
+uint i = 0;
+if (i &lt; 3) { // iteration #1
+    i++;
+    x++;
+    if (i &lt; 3) { // iteration #2
+        i++;
+        x++;
+        if (i &lt; 3) { // iteration #3
+            i++;
+            x++;
+            assert (i &lt; 3) // exit condition evaluation
+            // require(i &lt; 3) if `--optimistic_loop` is set
+        }
+    }
+}
+</code></p>
+<p>However, for less trivial cases, the definition is not so clear:
+<code>solidity
+uint x; // global state variable
+uint i = 0;
+while (true) {
+    x++; // if x overflows, we exit the loop and revert. But is this the loop condition?
+    if (i &gt;= 3) {
+        break;
+    }
+    i += 1;
+}
+</code></p>
+<p>Running the builtin sanity rule for the above code with <code>--loop_iter</code> of 2 or less
+results in sanity violation (can find no paths reaching the end of the loop), 
+as is expected.
+Sanity is passing with <code>--loop_iter 3</code>.</p>
+<p>However, running with <code>--loop_iter 3</code> actually shows 4 loop iterations
+in the Call Trace output. 
+The reason for that is that in cases the Prover cannot detect an exit condition
+in the loop's head, it unrolls one extra time to evaluate a potential exit condition 
+in the loop's body.
+In our case, the bytecode representation shows that the loop's head is ending with
+a non-conditional jump.
+The equivalent Solidity-like version of the unrolled code would look as follows, 
+(<code>c</code>-style <code>goto</code> and <code>label</code> commands were added for clarity):
+```solidity
+uint x; // global state variable
+uint i = 0;
+// iteration #1
+x++;
+if (i &gt;= 3) {
+    goto after<em>original</em>while<em>loop</em>end;
+}
+i += 1;</p>
+<p>// iteration #2
+x++;
+if (i &gt;= 3) {
+    goto after<em>original</em>while<em>loop</em>end;
+}
+i += 1;</p>
+<p>// iteration #3
+x++;
+if (i &gt;= 3) {
+    goto after<em>original</em>while<em>loop</em>end;
+}
+i += 1;</p>
+<p>// iteration #4
+x++;
+if (i &gt;= 3) {
+    goto after<em>original</em>while<em>loop</em>end;
+}
+i += 1;</p>
+<p>assert(false); // require(false) if <code>--optimistic_loop</code> is set</p>
+<p>after<em>original</em>while<em>loop</em>end: ...
+```</p>
+<p>In the next example, we show how two different compilations of the same code 
+lead to different behaviors of the unroller.</p>
+<h3>First low-level conditional branch is used for unrolling</h3>
+<p>The following examples show how the same code can generate different bytecodes
+in different versions of the Solidity compiler, in a way that affects the Prover's behavior.</p>
+<p>Consider
+```solidity
+import "./Other.sol";</p>
+<p>contract Loops {
+  uint x;
+  Other other;
+  function loop() external {
+    for (int i = 0 ; other.cond(i) ; i++) {
+      x++;
+    }
+  }
+}
+```</p>
+<p>where the <code>Other</code> contract is defined as:
+<code>solidity
+contract Other {
+  function cond(int i) external returns (bool) {
+    return i &lt; 3;
+  }
+}
+</code></p>
+<p>Considering the behavior of both contracts (by linking <code>--link Loops:other=Other</code>), we would assume that 3 iterations are sufficient:
+we increment <code>i</code> three times, and then evaluate the loop-exit condition <code>other.cond(3)</code> 
+which then evaluates to false. </p>
+<p>If the contract is compiled with <code>solc</code> version 0.8.18 and without optimizations,
+this is exactly the behavior that we get. 
+The sanity rule will succeed with just 3 iterations (<code>--loop_iter 3</code>).</p>
+<p>However, if we compiled the same code with <code>solc</code> version 0.7.6, we note that
+sanity fails for 3 iterations, and succeeds with 4 iterations.
+The reason for that is that in <code>solc7.6</code>, the first condition checked in the loop's head
+is that the <code>extcodesize</code> value of <code>other</code> is greater than zero, and this is considered the 
+loop exit condition.
+Therefore, with <code>--loop_iter 3</code>, the Prover is running 3 iterations of the loop,
+and one more check that <code>extcodesize(other) &gt; 0</code>, which trivially evaluates to true.
+One extra loop iteration is required to reach the actual code checking the value of <code>i</code> 
+in <code>other</code>, and indeed with <code>--loop_iter 4</code> the sanity rule passes.</p>
+<p>Of course, the user is not expected to be aware of such delicacies in
+how Solidity contracts are compiled. 
+It is therefore recommended to ensure the chosen <code>--loop_iter</code> configuration
+is sufficient both by running the basic sanity rule, 
+and if loops appear only under certain conditions, 
+to write specialized sanity rules that force the Prover to reason about these 
+particular code paths.
+Mutation testing can also be useful here.</p>
+</body></html>

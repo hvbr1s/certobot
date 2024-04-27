@@ -1,0 +1,378 @@
+<h1>CVL2 Migration Guide</h1>
+<p>This section gives a step-by-step process for migrating your specs from CVL 1 to
+CVL 2.  It only addresses the changes that are most likely to arise; for full
+details see {doc}<code>changes</code>.</p>
+<p>Here is an outline of the migration process:</p>
+<p><code>{contents}
+:local:
+:depth: 1
+</code></p>
+<p>If you have any questions, please {ref}<code>ask for help &lt;contact&gt;</code>!</p>
+<h2>Step 0: Install CVL 2</h2>
+<p>The <code>certora-cli</code> python package will use CVL 2 starting with version 4.0.0.</p>
+<p>If you aren't ready to migrate your specs yet, Certora will continue supporting
+CVL 1 for three months after the official release of CVL 2.  You can keep
+using CVL 1 after the release of <code>certora-cli-4.0.0</code> by pinning your
+<code>certora-cli</code> package to version <code>3.6.5</code>:</p>
+<p><code>
+pip install 'certora-cli&lt;4.0.0'
+</code></p>
+<p>If you want to switch between the two versions, see the instructions for setting
+up a virtual environment in {ref}<code>beta-install</code>.</p>
+<h2>Step 1: Skim CVL 2 changes</h2>
+<p>We recommend at least skimming {doc}<code>changes</code> to familiarize yourself with the
+changes introduced by CVL 2.</p>
+<h2>Step 2: Run the migration script</h2>
+<p>Certora has written a simple script to aid in the conversion from CVL 1 to
+CVL 2.  You can download the script <a href="https://gist.github.com/shellygr/c054a0ad569397ef4e19ec1d1d5afcdb">here</a>.</p>
+<p>The script will automatically modify all <code>.spec</code> files in a directory.  The
+script will modify the files in place, so make sure that you commit your files
+before running it.</p>
+<p>To run the script, place it in a file called <code>CVL1_to_CVL2.0_syntax_update.py</code>
+and run it using the following command:</p>
+<p><code>
+python3 CVL1_to_CVL2.0_syntax_update.py -d &lt;path&gt; -r
+</code></p>
+<p>Run <code>python3 CVL1_to_CVL2.0_syntax_update.py --help</code> for further instructions.</p>
+<p>The migration script only handles simple cases, and is not guaranteed to work.
+Some manual work and adjustment may be needed after running the script. The
+script may also make odd mistakes.</p>
+<p>The script will attempt to make the following changes:
+ - replace <code>sinvoke f(...)</code> with <code>f(...)</code>
+ - replace <code>invoke f(...)</code> with <code>f@withrevert(...)</code>
+ - replace <code>f(...).selector</code> with <code>sig:f(...).selector</code>
+ - ensure that rules start with <code>rule</code>
+ - replace <code>static_assert</code> with <code>assert</code>
+ - replace <code>static_require</code> with <code>require</code>
+ - add <code>;</code> to the end of <code>pragma</code>, <code>import</code>, <code>using</code>, and <code>use</code> statements
+ - add a <code>;</code> to the end of a methods block entry if it doesn't seem to continue to the next line
+ - add <code>function</code> to the beginning of a methods block entry
+ - add <code>external</code> to unsummarized or <code>DISPATCHER</code> methods block entries
+ - change <code>function f(...)</code> to <code>function _.f(...)</code> for summarized external functions</p>
+<p>In particular, as the script only consumes spec files, there are decisions that
+it cannot make, as they are based on the Solidity code. Some of those are
+listed here.</p>
+<h2>Step 3: Fix type errors</h2>
+<p>This is a good time to try running <code>certoraRun</code> on your spec.  The command-line
+interface to <code>certoraRun</code> has not changed in CVL 2, so you should try to verify
+your contract the same way you usually would.</p>
+<p>If your spec verifies without errors, move on to
+{ref}<code>cvl2-migration-summaries</code>!  If <code>certoraRun</code> reports errors, you will need
+to fix them manually.  Here are some of the more common errors that you may
+come across:</p>
+<p><code>{contents}
+:local:
+:depth: 1
+</code></p>
+<p>This section contains specific advice for these situations; if you come across
+problems that are not covered here, consult the {doc}<code>changes</code> or ask!</p>
+<h3>Syntax errors introduced by the migration script</h3>
+<p>The migration script is not perfect, and can make syntax mistakes in some
+cases, such as adding an extra semicolon or omitting a keyword.  We hope these
+will be easy to identify and fix, but if you have syntax errors you can't
+understand, consult {ref}<code>cvl2-superficial-syntax-changes</code>.</p>
+<h3>Type errors in arithmetic and casts</h3>
+<p>CVL 2 is more careful about converting between different integer types.  See
+{ref}<code>cvl2-integer-types</code> in the changes guide for complete details and
+examples.</p>
+<p>If you have errors that indicate problems with number types, try the following:</p>
+<ul>
+<li><p>Try to change most of your integers to <code>mathint</code>.  The only integers that
+should <em>not</em> be <code>mathint</code> are those that you are passing as arguments to
+contract functions.</p></li>
+<li><p>If you have a type error in a <code>havoc ... assuming</code> statement, consider using
+the {ref}<code>newer ghost variable syntax &lt;ghost-variables&gt;</code>.  This can avoid
+potential vacuity pitfalls caused by mixing <code>to_mathint</code> and <code>havoc ...
+assuming</code>.</p></li>
+<li><p>If you need to compare two different types of integers with with a comparison
+like <code>==</code>, <code>&gt;=</code>, you probably want to convert them to <code>mathint</code> using
+<code>to_mathint</code> unless they are part of a <code>havoc ... assuming</code> statement or a
+<code>require</code> statement.  See {ref}<code>cvl2-comparisons-identical-types</code> for an example
+of why you might <em>not</em> want to use <code>to_mathint</code>.</p></li>
+</ul>
+<p><code>{note}
+The only place you need `to_mathint` is in comparisons!  It won't hurt in other
+places, but it is unnecessary.
+</code></p>
+<ul>
+<li>If you need to modify the output of one contract function and pass it to
+another contract function, you will need to think carefully about how you
+want to handle overflow.  If you think the computation won't go out of bounds,
+you can use an <code>assert_</code> cast to assert that the value is in bounds.  If you
+want to ignore cases where the value goes out of bounds, you can use a
+<code>require_</code> cast (but think twice first: <code>require_</code> casts are dangerous!).
+See {ref}<code>cvl2-integer-types</code> for more details.</li>
+</ul>
+<p><code>{warning}
+Use `assert_` and `require_` casts sparingly!  `assert_` casts can lead to
+unnecessary counterexamples, and `require_` casts can hide bugs in your contracts
+(just as any `require` statement can).
+</code></p>
+<ul>
+<li><p>You cannot use <code>assert_</code> and <code>require_</code> casts inside
+{term}<code>quantified statements &lt;quantifier&gt;</code>.
+To solve that issue, you can introduce an additional universally quantified
+variable of type <code>uint256</code>, and require it to be equal to the expression using
+an upcast to <code>mathint</code>.</p>
+<p>For example, if there is a ghost array access <code>forall uint x. a[x+1] == 0</code>,
+rewrite it as follows:</p>
+<p><code>cvl
+forall uint x. forall uint y. to_mathint(y) == x+1 =&gt; a[y] == 0
+</code></p></li>
+</ul>
+<h3><code>using</code> statements</h3>
+<p>Multi-contract declaration using <code>using</code> statements are not imported.  If you
+have a spec <code>a.spec</code> importing <code>b.spec</code>, with <code>b.spec</code> declaring a
+multicontract contract usage, which you need in <code>a.spec</code>, repeat the
+declaration from <code>b.spec</code>, and rename the alias.</p>
+<p><em>The next minor version of CVL2 will improve this behavior.</em></p>
+<h3>Problems with <code>certorafallback</code> or <code>invoke_fallback</code></h3>
+<p>CVL2 does not allow you to refer to the fallback function explicitly as it was
+seldom used and not well-defined. The most common use case for having to refer
+to the fallback was to check if a parametric method is the fallback function.
+For that, one can use the <code>.isFallback</code> field of any variable of type <code>method</code>.</p>
+<p>See {ref}<code>cvl2-fallback-changes</code> for examples.</p>
+<p>(cvl2-migration-summaries)=</p>
+<h2>Step 4: Review your <code>methods</code> blocks</h2>
+<p>CVL 2 changes the requirements for and meanings of methods block entries; you
+should manually review all of your methods block entries to make sure they have
+the intended meanings.  Here are the things to consider:</p>
+<p><code>{contents}
+:local:
+:depth: 1
+</code></p>
+<p>The remainder of this section describes these considerations.  See
+{ref}<code>cvl2-methods-blocks</code> for more details.</p>
+<p>If you have complex methods blocks, we encourage you to examine the call
+resolution tab on the rule report to double-check that your summaries are
+applied as you expect them to be.</p>
+<h3><code>internal</code> and <code>external</code> methods</h3>
+<p>In CVL 2, you must mark <code>methods</code> block entries as either <code>internal</code> or
+<code>external</code>.  Unlike Solidity, you cannot mark entries as <code>private</code> or <code>public</code>.</p>
+<p>The Prover does not distinguish between <code>private</code> and <code>internal</code> methods; if
+you want to summarize a <code>private</code> method, use <code>internal</code> in the <code>methods</code> block.</p>
+<p>To understand how to work with public Solidity methods, it is important to
+understand how Solidity compiles public functions.  When a contract contains a
+public method, the Solidity compiler generates an internal method that executes
+the code, and an external method that calls the internal method.</p>
+<p>You can add methods block entries for either (or both) of those methods, and
+they will have different effects.  See {ref}<code>cvl2-visibility</code> for the details.</p>
+<h3>Receiver contracts</h3>
+<p>In CVL 1, method summaries applied to all methods in all contracts that match
+the specified signature.  In CVL 2, summaries only apply to one contract by
+default.</p>
+<p>You specify the receiver contract just before the method name.  For example, to
+refer to the <code>exampleMethod</code> method of the <code>ExampleContract</code> contract, you would
+write:</p>
+<p><code>cvl
+methods {
+    function ExampleContract.exampleMethod(uint) external returns(uint);
+}
+</code></p>
+<p>If no contract is specified, the default contract is <code>currentContract</code>.</p>
+<p>If you want to write an entry that applies to methods in all contracts with the
+given signature, you can use the special <code>_</code> receiver:</p>
+<p><code>cvl
+methods {
+    function _.exampleMethod(uint) external =&gt; NONDET;
+}
+</code></p>
+<p>Wildcard entries cannot specify return types.  If you summarize them with a CVL
+function or ghost, you will need to supply an <code>expect</code> clause.  See
+{ref}<code>cvl2-wildcards</code> for details.</p>
+<h2>Step 5: Profit!</h2>
+<p>Hopefully this guide has helped you successfully migrate to CVL 2.  Although
+the functional changes in CVL 2.0 are relatively small, the internal changes
+lay the groundwork for many exciting features.  We promise that the effort
+involved in migration will pay off in the next few releases!</p>
+<html><head><meta content="https://github.com/Certora/Documentation/blob/master/cvl/cvl2/migration.md" name="url"/><meta content="No Title Found" name="title"/><meta content="CVL2 Migration Guide
+This section gives a step-by-step process for migrating your specs from CVL 1 to
+CVL 2.  It only addresses the changes that are most likely to arise; for full
+details see {doc}cha" name="text"/></head><body><h1>CVL2 Migration Guide</h1>
+<p>This section gives a step-by-step process for migrating your specs from CVL 1 to
+CVL 2.  It only addresses the changes that are most likely to arise; for full
+details see {doc}<code>changes</code>.</p>
+<p>Here is an outline of the migration process:</p>
+<p><code>{contents}
+:local:
+:depth: 1
+</code></p>
+<p>If you have any questions, please {ref}<code>ask for help &lt;contact&gt;</code>!</p>
+<h2>Step 0: Install CVL 2</h2>
+<p>The <code>certora-cli</code> python package will use CVL 2 starting with version 4.0.0.</p>
+<p>If you aren't ready to migrate your specs yet, Certora will continue supporting
+CVL 1 for three months after the official release of CVL 2.  You can keep
+using CVL 1 after the release of <code>certora-cli-4.0.0</code> by pinning your
+<code>certora-cli</code> package to version <code>3.6.5</code>:</p>
+<p><code>
+pip install 'certora-cli&lt;4.0.0'
+</code></p>
+<p>If you want to switch between the two versions, see the instructions for setting
+up a virtual environment in {ref}<code>beta-install</code>.</p>
+<h2>Step 1: Skim CVL 2 changes</h2>
+<p>We recommend at least skimming {doc}<code>changes</code> to familiarize yourself with the
+changes introduced by CVL 2.</p>
+<h2>Step 2: Run the migration script</h2>
+<p>Certora has written a simple script to aid in the conversion from CVL 1 to
+CVL 2.  You can download the script <a href="https://gist.github.com/shellygr/c054a0ad569397ef4e19ec1d1d5afcdb">here</a>.</p>
+<p>The script will automatically modify all <code>.spec</code> files in a directory.  The
+script will modify the files in place, so make sure that you commit your files
+before running it.</p>
+<p>To run the script, place it in a file called <code>CVL1_to_CVL2.0_syntax_update.py</code>
+and run it using the following command:</p>
+<p><code>
+python3 CVL1_to_CVL2.0_syntax_update.py -d &lt;path&gt; -r
+</code></p>
+<p>Run <code>python3 CVL1_to_CVL2.0_syntax_update.py --help</code> for further instructions.</p>
+<p>The migration script only handles simple cases, and is not guaranteed to work.
+Some manual work and adjustment may be needed after running the script. The
+script may also make odd mistakes.</p>
+<p>The script will attempt to make the following changes:
+ - replace <code>sinvoke f(...)</code> with <code>f(...)</code>
+ - replace <code>invoke f(...)</code> with <code>f@withrevert(...)</code>
+ - replace <code>f(...).selector</code> with <code>sig:f(...).selector</code>
+ - ensure that rules start with <code>rule</code>
+ - replace <code>static_assert</code> with <code>assert</code>
+ - replace <code>static_require</code> with <code>require</code>
+ - add <code>;</code> to the end of <code>pragma</code>, <code>import</code>, <code>using</code>, and <code>use</code> statements
+ - add a <code>;</code> to the end of a methods block entry if it doesn't seem to continue to the next line
+ - add <code>function</code> to the beginning of a methods block entry
+ - add <code>external</code> to unsummarized or <code>DISPATCHER</code> methods block entries
+ - change <code>function f(...)</code> to <code>function _.f(...)</code> for summarized external functions</p>
+<p>In particular, as the script only consumes spec files, there are decisions that
+it cannot make, as they are based on the Solidity code. Some of those are
+listed here.</p>
+<h2>Step 3: Fix type errors</h2>
+<p>This is a good time to try running <code>certoraRun</code> on your spec.  The command-line
+interface to <code>certoraRun</code> has not changed in CVL 2, so you should try to verify
+your contract the same way you usually would.</p>
+<p>If your spec verifies without errors, move on to
+{ref}<code>cvl2-migration-summaries</code>!  If <code>certoraRun</code> reports errors, you will need
+to fix them manually.  Here are some of the more common errors that you may
+come across:</p>
+<p><code>{contents}
+:local:
+:depth: 1
+</code></p>
+<p>This section contains specific advice for these situations; if you come across
+problems that are not covered here, consult the {doc}<code>changes</code> or ask!</p>
+<h3>Syntax errors introduced by the migration script</h3>
+<p>The migration script is not perfect, and can make syntax mistakes in some
+cases, such as adding an extra semicolon or omitting a keyword.  We hope these
+will be easy to identify and fix, but if you have syntax errors you can't
+understand, consult {ref}<code>cvl2-superficial-syntax-changes</code>.</p>
+<h3>Type errors in arithmetic and casts</h3>
+<p>CVL 2 is more careful about converting between different integer types.  See
+{ref}<code>cvl2-integer-types</code> in the changes guide for complete details and
+examples.</p>
+<p>If you have errors that indicate problems with number types, try the following:</p>
+<ul>
+<li><p>Try to change most of your integers to <code>mathint</code>.  The only integers that
+should <em>not</em> be <code>mathint</code> are those that you are passing as arguments to
+contract functions.</p></li>
+<li><p>If you have a type error in a <code>havoc ... assuming</code> statement, consider using
+the {ref}<code>newer ghost variable syntax &lt;ghost-variables&gt;</code>.  This can avoid
+potential vacuity pitfalls caused by mixing <code>to_mathint</code> and <code>havoc ...
+assuming</code>.</p></li>
+<li><p>If you need to compare two different types of integers with with a comparison
+like <code>==</code>, <code>&gt;=</code>, you probably want to convert them to <code>mathint</code> using
+<code>to_mathint</code> unless they are part of a <code>havoc ... assuming</code> statement or a
+<code>require</code> statement.  See {ref}<code>cvl2-comparisons-identical-types</code> for an example
+of why you might <em>not</em> want to use <code>to_mathint</code>.</p></li>
+</ul>
+<p><code>{note}
+The only place you need `to_mathint` is in comparisons!  It won't hurt in other
+places, but it is unnecessary.
+</code></p>
+<ul>
+<li>If you need to modify the output of one contract function and pass it to
+another contract function, you will need to think carefully about how you
+want to handle overflow.  If you think the computation won't go out of bounds,
+you can use an <code>assert_</code> cast to assert that the value is in bounds.  If you
+want to ignore cases where the value goes out of bounds, you can use a
+<code>require_</code> cast (but think twice first: <code>require_</code> casts are dangerous!).
+See {ref}<code>cvl2-integer-types</code> for more details.</li>
+</ul>
+<p><code>{warning}
+Use `assert_` and `require_` casts sparingly!  `assert_` casts can lead to
+unnecessary counterexamples, and `require_` casts can hide bugs in your contracts
+(just as any `require` statement can).
+</code></p>
+<ul>
+<li><p>You cannot use <code>assert_</code> and <code>require_</code> casts inside
+{term}<code>quantified statements &lt;quantifier&gt;</code>.
+To solve that issue, you can introduce an additional universally quantified
+variable of type <code>uint256</code>, and require it to be equal to the expression using
+an upcast to <code>mathint</code>.</p>
+<p>For example, if there is a ghost array access <code>forall uint x. a[x+1] == 0</code>,
+rewrite it as follows:</p>
+<p><code>cvl
+forall uint x. forall uint y. to_mathint(y) == x+1 =&gt; a[y] == 0
+</code></p></li>
+</ul>
+<h3><code>using</code> statements</h3>
+<p>Multi-contract declaration using <code>using</code> statements are not imported.  If you
+have a spec <code>a.spec</code> importing <code>b.spec</code>, with <code>b.spec</code> declaring a
+multicontract contract usage, which you need in <code>a.spec</code>, repeat the
+declaration from <code>b.spec</code>, and rename the alias.</p>
+<p><em>The next minor version of CVL2 will improve this behavior.</em></p>
+<h3>Problems with <code>certorafallback</code> or <code>invoke_fallback</code></h3>
+<p>CVL2 does not allow you to refer to the fallback function explicitly as it was
+seldom used and not well-defined. The most common use case for having to refer
+to the fallback was to check if a parametric method is the fallback function.
+For that, one can use the <code>.isFallback</code> field of any variable of type <code>method</code>.</p>
+<p>See {ref}<code>cvl2-fallback-changes</code> for examples.</p>
+<p>(cvl2-migration-summaries)=</p>
+<h2>Step 4: Review your <code>methods</code> blocks</h2>
+<p>CVL 2 changes the requirements for and meanings of methods block entries; you
+should manually review all of your methods block entries to make sure they have
+the intended meanings.  Here are the things to consider:</p>
+<p><code>{contents}
+:local:
+:depth: 1
+</code></p>
+<p>The remainder of this section describes these considerations.  See
+{ref}<code>cvl2-methods-blocks</code> for more details.</p>
+<p>If you have complex methods blocks, we encourage you to examine the call
+resolution tab on the rule report to double-check that your summaries are
+applied as you expect them to be.</p>
+<h3><code>internal</code> and <code>external</code> methods</h3>
+<p>In CVL 2, you must mark <code>methods</code> block entries as either <code>internal</code> or
+<code>external</code>.  Unlike Solidity, you cannot mark entries as <code>private</code> or <code>public</code>.</p>
+<p>The Prover does not distinguish between <code>private</code> and <code>internal</code> methods; if
+you want to summarize a <code>private</code> method, use <code>internal</code> in the <code>methods</code> block.</p>
+<p>To understand how to work with public Solidity methods, it is important to
+understand how Solidity compiles public functions.  When a contract contains a
+public method, the Solidity compiler generates an internal method that executes
+the code, and an external method that calls the internal method.</p>
+<p>You can add methods block entries for either (or both) of those methods, and
+they will have different effects.  See {ref}<code>cvl2-visibility</code> for the details.</p>
+<h3>Receiver contracts</h3>
+<p>In CVL 1, method summaries applied to all methods in all contracts that match
+the specified signature.  In CVL 2, summaries only apply to one contract by
+default.</p>
+<p>You specify the receiver contract just before the method name.  For example, to
+refer to the <code>exampleMethod</code> method of the <code>ExampleContract</code> contract, you would
+write:</p>
+<p><code>cvl
+methods {
+    function ExampleContract.exampleMethod(uint) external returns(uint);
+}
+</code></p>
+<p>If no contract is specified, the default contract is <code>currentContract</code>.</p>
+<p>If you want to write an entry that applies to methods in all contracts with the
+given signature, you can use the special <code>_</code> receiver:</p>
+<p><code>cvl
+methods {
+    function _.exampleMethod(uint) external =&gt; NONDET;
+}
+</code></p>
+<p>Wildcard entries cannot specify return types.  If you summarize them with a CVL
+function or ghost, you will need to supply an <code>expect</code> clause.  See
+{ref}<code>cvl2-wildcards</code> for details.</p>
+<h2>Step 5: Profit!</h2>
+<p>Hopefully this guide has helped you successfully migrate to CVL 2.  Although
+the functional changes in CVL 2.0 are relatively small, the internal changes
+lay the groundwork for many exciting features.  We promise that the effort
+involved in migration will pay off in the next few releases!</p>
+</body></html>

@@ -1,0 +1,307 @@
+<p>(built-in)=</p>
+<h1>Built-in Rules</h1>
+<p>The Certora Prover has built-in general-purpose rules targeted at finding common
+vulnerabilities.  These rules can be verified on a contract without writing any
+contract-specific rules.</p>
+<p>Built-in rules can be included in any spec file by writing <code>use builtin rule
+&lt;rule-name&gt;;</code>.  This document describes the available built-in rules.</p>
+<p><code>{contents}
+</code></p>
+<h2>Syntax</h2>
+<p>The syntax for rules is given by the following <a href="ebnf-syntax">EBNF grammar</a>:</p>
+<p>```
+built<em>in</em>rule ::= "use" "builtin" "rule" built<em>in</em>rule_name ";"</p>
+<p>built<em>in</em>rule_name ::=
+    | "msgValueInLoopRule"
+    | "hasDelegateCalls"
+    | "sanity"
+    | "deepSanity"
+    | "viewReentrancy"
+```</p>
+<p>(built-in-msg-value-in-loop)=</p>
+<h2>Bad loop detection — <code>msgValueInLoopRule</code></h2>
+<p>Loops that <a href="https://trustchain.medium.com/ethereum-msg-value-reuse-vulnerability-5afd0aa2bcef">use <code>msg.value</code> or make delegate
+calls</a> are a well-known source of security
+vulnerabilities.</p>
+<p>The <code>msgValueInLoopRule</code> detects these anti-patterns.  It can be enabled by
+including
+<code>cvl
+use builtin rule msgValueInLoopRule;
+</code>
+in a spec file.  The rule will fail on any functions that can make delegate
+calls or access <code>msg.value</code> inside a loop. This includes any functions that recursively call any functions that has
+this vulnerability.</p>
+<p>(built-in-has-delegate-calls)=</p>
+<h2>Delegate call detection — <code>hasDelegateCalls</code></h2>
+<p>The <code>hasDelegateCalls</code> built-in rule is a handy way to find delegate calls in
+a contract. <a href="https://blog.solidityscan.com/security-issues-with-delegate-calls-4ae64d775b76">Contracts that use delegate calls</a> require proper security checking.</p>
+<p>The <code>hasDelegateCalls</code> can be enabled by including
+<code>cvl
+use builtin rule hasDelegateCalls;
+</code>
+in a spec file.  Any functions that can make delegate calls will fail the
+<code>hasDelegateCalls</code> rule.</p>
+<p>(built-in-sanity)=</p>
+<h2>Basic setup checks — <code>sanity</code></h2>
+<p>The <code>sanity</code> rule checks that there is at least one non-reverting path through
+each contract function.  It can be enabled by including
+<code>cvl
+use builtin rule sanity;
+</code>
+in a spec file.</p>
+<p>The sanity rule is useful for two reasons:</p>
+<ul>
+<li><p>It is an easy way to determine which contract functions take a long time to
+analyze.  If a method takes a long time to verify the <code>sanity</code> rule (or
+times out), it will almost certainly time out while verifying interesting
+properties.  This can help you quickly discover which methods may need
+{term}<code>summarization &lt;summary&gt;</code>.</p></li>
+<li><p>A method the fails the <code>sanity</code> rule will revert on every input; every rule
+that calls the method will therefore be {term}<code>vacuous &lt;vacuity&gt;</code>.  This
+probably indicates a problem with the Prover configuration; the most likely
+cause is {ref}<code>loop unrolling &lt;unrolling&gt;</code>.</p></li>
+</ul>
+<p>We recommend running the sanity rule at the beginning of a project to
+ensure that the Prover's configuration is reasonable.</p>
+<p><code>{note}
+The `sanity` built-in rule is unrelated to the {ref}`--rule_sanity` option;
+the built-in rule is used to check the basic setup, while `--rule_sanity` checks
+individual rules.
+</code></p>
+<h3>How <code>sanity</code> is checked</h3>
+<p>The <code>sanity</code> rule is translated into the following {term}<code>parametric rule</code>:</p>
+<p><code>cvl
+rule sanity {
+    method f; env e;
+    calldataarg arg;
+    f(e, arg); 
+    satisfy true;
+}
+</code></p>
+<p>To find a satisfying trace, the Prover must construct an input
+for which <code>f</code> doesn't revert.</p>
+<p>(built-in-deep-sanity)=</p>
+<h2>Thorough complexity checks — <code>deepSanity</code></h2>
+<p>The basic sanity rule only tries to find a <em>single</em> input that causes each
+function to execute without reverting.  While this check can quickly identify
+problems with the Prover setup, a successful <code>sanity</code> run does not guarantee
+that the contract methods won't cause Prover timeouts, or that all of the
+contract code is reachable.</p>
+<p>For example, consider the following method:
+<code>solidity
+function veryComplexFunction() returns(uint) {
+    uint x = 0;
+    for (uint i = 0 ; i &lt; array.len; i++) {
+        x = x + complexComputation(i);
+    }
+    return x;
+}
+</code></p>
+<p>There is clearly a simple non-reverting path through the code: it will
+immediately return if <code>array.len</code> is <code>0</code>; the basic <code>sanity</code> can quickly find a
+{term}<code>model</code> like this without even considering the implementation of
+<code>complexComputation</code>, so the <code>sanity</code> rule will succeed.  However, verifying
+any property that depends on the return value of <code>veryComplexFunction</code> will
+require the Prover to reason about <code>complexComputation()</code>, which may cause
+timeouts.  Moreover, portions of <code>complexComputation</code> may be unreachable, and
+this will not be caught by the basic <code>sanity</code> rule.</p>
+<p>The <code>deepSanity</code> rule generalizes the basic <code>sanity</code> rule by heuristically
+choosing interesting statements in the contract code and ensuring that there
+are non-reverting {term}<code>models &lt;model&gt;</code> that execute those statements.  In the above
+example, one of the paths chosen by <code>deepSanity</code> would go through the body of
+the <code>for</code> loop, forcing the Prover to find a non-reverting path through the
+<code>complexComputation</code> method.</p>
+<p>The <code>deepSanity</code> rule heuristic favors the following program points:
+1. The "if" and "else" branches of a code-heavy <code>if</code> statement
+2. The beginning of an external call
+3. The beginning of the program (this is the same as the usual sanity rule)</p>
+<p>The <code>deepSanity</code> rule can be enabled by including
+<code>cvl
+use builtin rule deepSanity;
+</code>
+in a spec file.  You must also pass the {ref}<code>--multi_assert_check</code> flag to
+the Prover.</p>
+<p>The number of code points that are chosen can be configured with the
+{ref}<code>-maxNumberOfReachChecksBasedOnDomination</code> flag; the default value is
+<code>10</code>.</p>
+<h3>How <code>deepSanity</code> is checked</h3>
+<p>The <code>deepSanity</code> rule works similarly to the <code>sanity</code> rule; it adds an
+additional variable <code>x_p</code> for each interesting program point <code>p</code>, and
+instruments the contract code at <code>p</code> to set <code>x_p</code> to <code>true</code>.  The Prover then
+tries to prove that <code>x_p</code> is false after executing the function.  To find a
+counterexample; the Prover must construct a model that passes through <code>p</code>.</p>
+<p>(built-in-view-reentrancy)=</p>
+<h2>Read-only reentrancy detection — <code>viewReentrancy</code></h2>
+<p>The <code>viewReentrancy</code>  built-in rule detects 
+<a href="https://blog.pessimistic.io/read-only-reentrancy-in-depth-6ea7e9d78e85">read-only reentrancy vulnerabilities in a contract</a>.</p>
+<p>The <code>viewReentrancy</code> rule can be enabled by including
+<code>cvl
+use builtin rule viewReentrancy;
+</code>
+in a spec file.  Any functions that have read-only reentrancy will fail the
+<code>viewReentrancy</code> rule.</p>
+<h3>How <code>viewReentrancy</code> is checked</h3>
+<p>Reentrancy vulnerabilities can arise when a contract makes an external call with an inconsistent internal 
+state. This behavior allows the receiver contract to make reentrant calls that exploit the inconsistency.</p>
+<p>The <code>viewReentrancy</code> rule ensures that whenever a method <code>f</code> of {ref}<code>currentContract &lt;currentContract&gt;</code> makes an external call, 
+the internal state of <code>currentContract</code> is equivalent to either (1) the state of <code>currentContract</code> at the beginning of the calling function,
+or (2) the state of <code>currentContract</code> at the end of the calling function (by "equivalent", 
+we mean that all view functions return the same values). 
+This ensures that the external call cannot observe <code>currentContract</code> in any state that it couldn't have without being 
+called from <code>currentContract</code>. </p>
+<html><head><meta content="https://github.com/Certora/Documentation/blob/master/cvl/builtin.md" name="url"/><meta content="No Title Found" name="title"/><meta content="(built-in)=
+Built-in Rules
+The Certora Prover has built-in general-purpose rules targeted at finding common
+vulnerabilities.  These rules can be verified on a contract without writing any
+contract-spe" name="text"/></head><body><p>(built-in)=</p>
+<h1>Built-in Rules</h1>
+<p>The Certora Prover has built-in general-purpose rules targeted at finding common
+vulnerabilities.  These rules can be verified on a contract without writing any
+contract-specific rules.</p>
+<p>Built-in rules can be included in any spec file by writing <code>use builtin rule
+&lt;rule-name&gt;;</code>.  This document describes the available built-in rules.</p>
+<p><code>{contents}
+</code></p>
+<h2>Syntax</h2>
+<p>The syntax for rules is given by the following <a href="ebnf-syntax">EBNF grammar</a>:</p>
+<p>```
+built<em>in</em>rule ::= "use" "builtin" "rule" built<em>in</em>rule_name ";"</p>
+<p>built<em>in</em>rule_name ::=
+    | "msgValueInLoopRule"
+    | "hasDelegateCalls"
+    | "sanity"
+    | "deepSanity"
+    | "viewReentrancy"
+```</p>
+<p>(built-in-msg-value-in-loop)=</p>
+<h2>Bad loop detection — <code>msgValueInLoopRule</code></h2>
+<p>Loops that <a href="https://trustchain.medium.com/ethereum-msg-value-reuse-vulnerability-5afd0aa2bcef">use <code>msg.value</code> or make delegate
+calls</a> are a well-known source of security
+vulnerabilities.</p>
+<p>The <code>msgValueInLoopRule</code> detects these anti-patterns.  It can be enabled by
+including
+<code>cvl
+use builtin rule msgValueInLoopRule;
+</code>
+in a spec file.  The rule will fail on any functions that can make delegate
+calls or access <code>msg.value</code> inside a loop. This includes any functions that recursively call any functions that has
+this vulnerability.</p>
+<p>(built-in-has-delegate-calls)=</p>
+<h2>Delegate call detection — <code>hasDelegateCalls</code></h2>
+<p>The <code>hasDelegateCalls</code> built-in rule is a handy way to find delegate calls in
+a contract. <a href="https://blog.solidityscan.com/security-issues-with-delegate-calls-4ae64d775b76">Contracts that use delegate calls</a> require proper security checking.</p>
+<p>The <code>hasDelegateCalls</code> can be enabled by including
+<code>cvl
+use builtin rule hasDelegateCalls;
+</code>
+in a spec file.  Any functions that can make delegate calls will fail the
+<code>hasDelegateCalls</code> rule.</p>
+<p>(built-in-sanity)=</p>
+<h2>Basic setup checks — <code>sanity</code></h2>
+<p>The <code>sanity</code> rule checks that there is at least one non-reverting path through
+each contract function.  It can be enabled by including
+<code>cvl
+use builtin rule sanity;
+</code>
+in a spec file.</p>
+<p>The sanity rule is useful for two reasons:</p>
+<ul>
+<li><p>It is an easy way to determine which contract functions take a long time to
+analyze.  If a method takes a long time to verify the <code>sanity</code> rule (or
+times out), it will almost certainly time out while verifying interesting
+properties.  This can help you quickly discover which methods may need
+{term}<code>summarization &lt;summary&gt;</code>.</p></li>
+<li><p>A method the fails the <code>sanity</code> rule will revert on every input; every rule
+that calls the method will therefore be {term}<code>vacuous &lt;vacuity&gt;</code>.  This
+probably indicates a problem with the Prover configuration; the most likely
+cause is {ref}<code>loop unrolling &lt;unrolling&gt;</code>.</p></li>
+</ul>
+<p>We recommend running the sanity rule at the beginning of a project to
+ensure that the Prover's configuration is reasonable.</p>
+<p><code>{note}
+The `sanity` built-in rule is unrelated to the {ref}`--rule_sanity` option;
+the built-in rule is used to check the basic setup, while `--rule_sanity` checks
+individual rules.
+</code></p>
+<h3>How <code>sanity</code> is checked</h3>
+<p>The <code>sanity</code> rule is translated into the following {term}<code>parametric rule</code>:</p>
+<p><code>cvl
+rule sanity {
+    method f; env e;
+    calldataarg arg;
+    f(e, arg); 
+    satisfy true;
+}
+</code></p>
+<p>To find a satisfying trace, the Prover must construct an input
+for which <code>f</code> doesn't revert.</p>
+<p>(built-in-deep-sanity)=</p>
+<h2>Thorough complexity checks — <code>deepSanity</code></h2>
+<p>The basic sanity rule only tries to find a <em>single</em> input that causes each
+function to execute without reverting.  While this check can quickly identify
+problems with the Prover setup, a successful <code>sanity</code> run does not guarantee
+that the contract methods won't cause Prover timeouts, or that all of the
+contract code is reachable.</p>
+<p>For example, consider the following method:
+<code>solidity
+function veryComplexFunction() returns(uint) {
+    uint x = 0;
+    for (uint i = 0 ; i &lt; array.len; i++) {
+        x = x + complexComputation(i);
+    }
+    return x;
+}
+</code></p>
+<p>There is clearly a simple non-reverting path through the code: it will
+immediately return if <code>array.len</code> is <code>0</code>; the basic <code>sanity</code> can quickly find a
+{term}<code>model</code> like this without even considering the implementation of
+<code>complexComputation</code>, so the <code>sanity</code> rule will succeed.  However, verifying
+any property that depends on the return value of <code>veryComplexFunction</code> will
+require the Prover to reason about <code>complexComputation()</code>, which may cause
+timeouts.  Moreover, portions of <code>complexComputation</code> may be unreachable, and
+this will not be caught by the basic <code>sanity</code> rule.</p>
+<p>The <code>deepSanity</code> rule generalizes the basic <code>sanity</code> rule by heuristically
+choosing interesting statements in the contract code and ensuring that there
+are non-reverting {term}<code>models &lt;model&gt;</code> that execute those statements.  In the above
+example, one of the paths chosen by <code>deepSanity</code> would go through the body of
+the <code>for</code> loop, forcing the Prover to find a non-reverting path through the
+<code>complexComputation</code> method.</p>
+<p>The <code>deepSanity</code> rule heuristic favors the following program points:
+1. The "if" and "else" branches of a code-heavy <code>if</code> statement
+2. The beginning of an external call
+3. The beginning of the program (this is the same as the usual sanity rule)</p>
+<p>The <code>deepSanity</code> rule can be enabled by including
+<code>cvl
+use builtin rule deepSanity;
+</code>
+in a spec file.  You must also pass the {ref}<code>--multi_assert_check</code> flag to
+the Prover.</p>
+<p>The number of code points that are chosen can be configured with the
+{ref}<code>-maxNumberOfReachChecksBasedOnDomination</code> flag; the default value is
+<code>10</code>.</p>
+<h3>How <code>deepSanity</code> is checked</h3>
+<p>The <code>deepSanity</code> rule works similarly to the <code>sanity</code> rule; it adds an
+additional variable <code>x_p</code> for each interesting program point <code>p</code>, and
+instruments the contract code at <code>p</code> to set <code>x_p</code> to <code>true</code>.  The Prover then
+tries to prove that <code>x_p</code> is false after executing the function.  To find a
+counterexample; the Prover must construct a model that passes through <code>p</code>.</p>
+<p>(built-in-view-reentrancy)=</p>
+<h2>Read-only reentrancy detection — <code>viewReentrancy</code></h2>
+<p>The <code>viewReentrancy</code>  built-in rule detects 
+<a href="https://blog.pessimistic.io/read-only-reentrancy-in-depth-6ea7e9d78e85">read-only reentrancy vulnerabilities in a contract</a>.</p>
+<p>The <code>viewReentrancy</code> rule can be enabled by including
+<code>cvl
+use builtin rule viewReentrancy;
+</code>
+in a spec file.  Any functions that have read-only reentrancy will fail the
+<code>viewReentrancy</code> rule.</p>
+<h3>How <code>viewReentrancy</code> is checked</h3>
+<p>Reentrancy vulnerabilities can arise when a contract makes an external call with an inconsistent internal 
+state. This behavior allows the receiver contract to make reentrant calls that exploit the inconsistency.</p>
+<p>The <code>viewReentrancy</code> rule ensures that whenever a method <code>f</code> of {ref}<code>currentContract &lt;currentContract&gt;</code> makes an external call, 
+the internal state of <code>currentContract</code> is equivalent to either (1) the state of <code>currentContract</code> at the beginning of the calling function,
+or (2) the state of <code>currentContract</code> at the end of the calling function (by "equivalent", 
+we mean that all view functions return the same values). 
+This ensures that the external call cannot observe <code>currentContract</code> in any state that it couldn't have without being 
+called from <code>currentContract</code>. </p>
+</body></html>

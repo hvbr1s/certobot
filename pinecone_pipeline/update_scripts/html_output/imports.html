@@ -1,0 +1,67 @@
+<p>(use)=</p>
+<h1>Import and Use Statements</h1>
+<p>Contents of additional spec files can be imported using the <code>import</code> command.
+Some parts of the imported spec files are implicitly included in the importing
+spec file, while others such as rules and invariants must be explicitly
+<code>use</code>d. Functions, definitions, filters, and preserved blocks of the imported spec can be overridden by the importing 
+spec. If a spec defines a function and uses it (e.g. in a rule or function), and another spec imports it and overrides 
+it, uses in the imported spec use the new version.</p>
+<h2>Examples</h2>
+<ul>
+<li><a href="https://github.com/Certora/Examples/blob/be09cf32c55e39f5f5aa8cba1431f9e519b52365/CVLByExample/import/certora/specs/sub.spec#L1">Example for <code>import</code></a></li>
+<li><a href="https://github.com/Certora/Examples/blob/61ac29b1128c68aff7e8d1e77bc80bfcbd3528d6/CVLByExample/import/certora/specs/sub.spec#L24"><code>use rule</code></a></li>
+<li><a href="https://github.com/Certora/Examples/blob/be09cf32c55e39f5f5aa8cba1431f9e519b52365/CVLByExample/import/certora/specs/sub.spec#L3"><code>use rule</code> with filters</a></li>
+<li><a href="https://github.com/Certora/Examples/blob/be09cf32c55e39f5f5aa8cba1431f9e519b52365/CVLByExample/import/certora/specs/sub.spec#L3">overriding imported filters</a></li>
+<li><a href="https://github.com/Certora/Examples/blob/be09cf32c55e39f5f5aa8cba1431f9e519b52365/CVLByExample/import/certora/specs/sub.spec#L8"><code>use invariant</code></a>
+<ul>
+<li><a href="https://github.com/Certora/Examples/blob/be09cf32c55e39f5f5aa8cba1431f9e519b52365/CVLByExample/import/certora/specs/sub.spec#L10">overriding imported <code>preserved</code></a></li>
+<li><a href="https://github.com/Certora/Examples/blob/be09cf32c55e39f5f5aa8cba1431f9e519b52365/CVLByExample/import/certora/specs/sub.spec#L14">adding a <code>preserved</code> block</a></li>
+</ul></li>
+</ul>
+<h2>Syntax</h2>
+<p>The syntax for <code>import</code> and <code>use</code> statements is given by the following <a href="ebnf-syntax">EBNF grammar</a>:</p>
+<p>```
+import ::= "import" string</p>
+<p>use ::= "use" "rule" id
+        [ "filtered" "{" id "-&gt;" expression { "," id "-&gt;" expression } "}" ]
+      | "use" "builtin" "rule" id
+      | "use" "invariant" id [ "filtered" "{" id "-&gt;" expression "}" ] [ "{" { preserved_block } "}" ]</p>
+<p>```</p>
+<p>See {doc}<code>basics</code> for the <code>string</code> and <code>id</code> productions, {doc}<code>expr</code> for the <code>expression</code> production, and 
+{doc}<code>invariants</code> for the <code>filtered</code> and <code>preserved_block</code> production.</p>
+<html><head><meta content="https://github.com/Certora/Documentation/blob/master/cvl/imports.md" name="url"/><meta content="No Title Found" name="title"/><meta content="(use)=
+Import and Use Statements
+Contents of additional spec files can be imported using the import command.
+Some parts of the imported spec files are implicitly included in the importing
+spec file, w" name="text"/></head><body><p>(use)=</p>
+<h1>Import and Use Statements</h1>
+<p>Contents of additional spec files can be imported using the <code>import</code> command.
+Some parts of the imported spec files are implicitly included in the importing
+spec file, while others such as rules and invariants must be explicitly
+<code>use</code>d. Functions, definitions, filters, and preserved blocks of the imported spec can be overridden by the importing 
+spec. If a spec defines a function and uses it (e.g. in a rule or function), and another spec imports it and overrides 
+it, uses in the imported spec use the new version.</p>
+<h2>Examples</h2>
+<ul>
+<li><a href="https://github.com/Certora/Examples/blob/be09cf32c55e39f5f5aa8cba1431f9e519b52365/CVLByExample/import/certora/specs/sub.spec#L1">Example for <code>import</code></a></li>
+<li><a href="https://github.com/Certora/Examples/blob/61ac29b1128c68aff7e8d1e77bc80bfcbd3528d6/CVLByExample/import/certora/specs/sub.spec#L24"><code>use rule</code></a></li>
+<li><a href="https://github.com/Certora/Examples/blob/be09cf32c55e39f5f5aa8cba1431f9e519b52365/CVLByExample/import/certora/specs/sub.spec#L3"><code>use rule</code> with filters</a></li>
+<li><a href="https://github.com/Certora/Examples/blob/be09cf32c55e39f5f5aa8cba1431f9e519b52365/CVLByExample/import/certora/specs/sub.spec#L3">overriding imported filters</a></li>
+<li><a href="https://github.com/Certora/Examples/blob/be09cf32c55e39f5f5aa8cba1431f9e519b52365/CVLByExample/import/certora/specs/sub.spec#L8"><code>use invariant</code></a>
+<ul>
+<li><a href="https://github.com/Certora/Examples/blob/be09cf32c55e39f5f5aa8cba1431f9e519b52365/CVLByExample/import/certora/specs/sub.spec#L10">overriding imported <code>preserved</code></a></li>
+<li><a href="https://github.com/Certora/Examples/blob/be09cf32c55e39f5f5aa8cba1431f9e519b52365/CVLByExample/import/certora/specs/sub.spec#L14">adding a <code>preserved</code> block</a></li>
+</ul></li>
+</ul>
+<h2>Syntax</h2>
+<p>The syntax for <code>import</code> and <code>use</code> statements is given by the following <a href="ebnf-syntax">EBNF grammar</a>:</p>
+<p>```
+import ::= "import" string</p>
+<p>use ::= "use" "rule" id
+        [ "filtered" "{" id "-&gt;" expression { "," id "-&gt;" expression } "}" ]
+      | "use" "builtin" "rule" id
+      | "use" "invariant" id [ "filtered" "{" id "-&gt;" expression "}" ] [ "{" { preserved_block } "}" ]</p>
+<p>```</p>
+<p>See {doc}<code>basics</code> for the <code>string</code> and <code>id</code> productions, {doc}<code>expr</code> for the <code>expression</code> production, and 
+{doc}<code>invariants</code> for the <code>filtered</code> and <code>preserved_block</code> production.</p>
+</body></html>

@@ -1,0 +1,518 @@
+<h1>Certora CLI 5.0 Changes</h1>
+<p>The release of <code>certora-cli</code> version 5.0 introduces a few small breaking
+changes for CVL.  These changes improve the coverage for parametric rules and
+invariants, disallow Solidity function calls in quantified expressions,
+and simplify some rarely-used features.  This document explains those changes
+and how to work with them.</p>
+<p><code>{note}
+`certora-cli` 5.0 also includes several new features, bug fixes, and
+performance improvements that are not discussed here; see {ref}`prover-release-notes`
+for more details.
+</code></p>
+<p><code>{contents}
+</code></p>
+<h2>Exhaustive parametric rules</h2>
+<p>Starting with <code>certora-cli</code> version 5.0, {term}<code>parametric rule</code>s and
+{term}<code>invariant</code>s will now be checked on the methods of all contracts by
+default, instead of just the primary contract.</p>
+<p>This change improves the coverage of rules and can catch important errors.  For
+example, an invariant that relates a contract's total supply to its balance in
+an underlying token contract could be invalidated by calling methods directly on
+the underlying token; before this change those violations would not have been
+detected.</p>
+<p>This change can break existing specifications in a few ways:</p>
+<ul>
+<li><p>A property that should hold cannot be verified.</p></li>
+<li><p>A parametric rule that was never intended to apply to secondary contracts
+may be violated by methods of those contracts.</p></li>
+<li><p>Verification may time out on methods of secondary contracts.</p></li>
+</ul>
+<p>The remainder of this section describes how to address these three failure
+modes.</p>
+<p><code>{contents}
+:local:
+</code></p>
+<h3>Fixing properties that should hold</h3>
+<p>Most parametric rules and all invariants encode general properties of a system
+that should be impossible for any contract to violate.  For example, consider a
+"solvency" invariant that shows that a vault contract holds enough underlying
+tokens to cover any withdrawals:</p>
+<p><code>cvl
+invariant solvency()
+    underlying.balanceOf(currentContract) &gt;= currentContract.totalSupply();
+</code></p>
+<p>Any violation of this property would be an important security vulnerability,
+regardless of whether it is violated by a method of the vault or a method of
+the underlying token.  Therefore, it is important to check that no method of
+any contract can violate these kinds of properties.  However, sometimes
+verifying these kinds of properties on methods of secondary contracts will
+require additional work.</p>
+<p>Continuing the solvency example, the Prover is likely to find a violation of
+the solvency rule in <code>underlying.transferFrom</code> where the vault contract has
+given an allowance to a third party.  If a third party has an allowance, it
+will be able to reduce the vault's balance by transferring the vault's tokens
+to itself.</p>
+<p>This violation represents an important vulnerability: if the vault mismanages
+its allowances, then it may become insolvent.  This violation shows that the
+solvency of the vault depends on the correct management of its underlying
+allowances.</p>
+<p>Therefore, to get the rule to pass, we will need to add another invariant
+stating that the vault manages its allowances correctly:</p>
+<p><code>cvl
+invariant no_vault_allowance()
+    underlying.allowance(currentContract) == 0;
+</code></p>
+<p>We can then use this invariant in the <code>preserved</code> block for the original
+solvency rule.  We are also likely to get violations from the case that the
+vault contract itself calls methods on the underlying contract, so we rule that
+out as well[^call-note]:</p>
+<p>behaviors. If the vault does call methods on the underlying contract, it will
+  only do so from its code, and that call will be analyzed while the Prover is
+  verifying the calling method.  The additional requirement only rules out
+  spurious counterexamples where the vault makes calls to the underlying token
+  without having code that does so.</p>
+<p><code>cvl
+invariant solvency()
+    underlying.balanceOf(currentContract) &gt;= currentContract.totalSupply()
+    {
+        preserved with (env e) {
+            require e.msg.sender != currentContract;
+            requireInvariant no_vault_allowance();
+        }
+    }
+</code></p>
+<p>There is nothing new about this process of identifying violations and adding
+new invariants as necessary; it is the same process you would use for analyzing
+any violation.  This example just shows that some work may be required when
+verifying old specifications with <code>certora-cli</code> 5.0.</p>
+<p>The benefit is that by checking methods on secondary contracts, the Prover
+forces us to consider a previously unstated assumptions about the contract and
+write invariants that could detect important security vulnerabilities.  For
+this reason, you are encouraged to identify and prove additional invariants
+to address counterexamples instead of using the filtering techniques described
+in the following sections.</p>
+<h3>Filtering properties that should not be checked</h3>
+<p>Some parametric rules encode properties that are only expected to hold on a
+specific contract.  For example, you might have a rule that ensures that every
+successful method invocation is correctly authorized:</p>
+<p>```cvl
+rule authorization_check(method f)
+filtered { f -&gt; f.isView }
+{
+    env e; calldataarg args;</p>
+<pre><code>f(e,args);
+
+assert is_authorized(e.msg.sender, f.selector);
+</code></pre>
+<p>}
+```</p>
+<p>There is no reason to expect this property to hold on any contract besides the
+main contract.</p>
+<p>To handle cases like these, <code>certora-cli</code> 5.0 introduces two new ways to filter
+methods to a specific contract.</p>
+<p>The first and simplest way to restrict verification to a specific contract is
+to call the <code>method</code> object with a specific receiver contract:</p>
+<p>```{code-block} cvl
+:emphasize-lines: 6</p>
+<p>rule authorization_check(method f)
+filtered { f -&gt; f.isView }
+{
+    env e; calldataarg args;</p>
+<pre><code>currentContract.f(e,args);
+
+assert is_authorized(e.msg.sender, f.selector);
+</code></pre>
+<p>}
+```</p>
+<p>This syntax will add a filter that will only instantiate <code>f</code> with the methods
+of <code>currentContract</code>.  The receiver may be either <code>currentContract</code> or a
+variable introduced by a <code>using</code> clause.</p>
+<p>The second and more flexible way is to use the new <code>contract</code> property of the
+<code>method</code> variable:
+```{code-block} cvl
+:emphasize-lines: 2</p>
+<p>rule authorization_check(method f)
+filtered { f -&gt; f.isView &amp;&amp; f.contract == currentContract }
+{
+    env e; calldataarg args;</p>
+<pre><code>f(e,args);
+
+assert is_authorized(e.msg.sender, f.selector);
+</code></pre>
+<p>}
+```</p>
+<p>If <code>f</code> is a <code>method</code> variable, <code>f.contract</code> refers to the contract that contains
+the method <code>f</code>.</p>
+<p>(v5-contract-option)=</p>
+<h3>Focusing on specific contracts</h3>
+<p>If you want to focus verification on a specific contract, you can do so using
+the {ref}<code>--parametric_contracts</code> option.  This option takes a list of contracts and only
+instantiates parametric rules and invariants on methods of those contracts.</p>
+<p>You can use this option to help transition specs to <code>certora-cli</code> 5.0; if <code>C</code>
+is the main contract being verified, then passing <code>--parametric_contracts C</code> will cause
+method variables to be instantiated in the same way the would have in older
+versions.</p>
+<h2>Disallow calls to contract functions in quantified expressions</h2>
+<p>Starting with <code>certora-cli</code> version 5.0, the Prover no longer supports
+making contract method calls in quantified expression bodies by
+default.</p>
+<p>For example, given the simple contract below, you can no longer
+use the <code>method</code> <code>getI()</code> in a quantified expression body.</p>
+<p>```{code-block} solidity
+contract example {</p>
+<p>uint i; </p>
+<p>function getI() public view returns (uint256) {
+       return i;
+   }
+}
+```</p>
+<p>```{code-block} cvl
+:emphasize-lines: 4</p>
+<p>rule there_exists {
+    // Using getI() in the quantified body will now cause the Prover to
+    // generate a type-checking error.
+    require (exists uint256 i . i == getI());
+    assert false, "Prover will generate an error before this line";
+}
+```</p>
+<p>In the example rule <code>there_exists</code>, the Prover will now generate an error similar
+to the following:</p>
+<p><code>text
+Error in spec file (test2.spec:8:36): Contract function calls such as getI()
+are disallowed inside quantified formulas.
+</code></p>
+<p>In most simple cases, you can replace contract method calls with either a
+{ref}direct storage access &lt;...&gt; or a {ref}ghost <ghosts>. For example the
+above function <code>getI</code> simply returns the storage variable <code>i</code> and you can
+change the <code>require</code> statement in the <code>there_exists</code> rule to use storage access:
+<code>require (exists uint i . i == currentContract.i)</code>. To use a ghost, declare
+the ghost and the hook that populates the ghost with the current value of
+the contract variable <code>i</code>.</ghosts></p>
+<p>```{code-block} cvl
+ghost uint gI;</p>
+<p>hook Sstore i uint256 v {
+    gI = v;
+}
+```</p>
+<p>Finally, replace <code>getI</code> in the <code>require</code> statement in rule <code>there_exists</code> with the
+ghost variable <code>gI</code>: <code>require (exists uint i . i == gI)</code>.</p>
+<p>If you must use contract method calls in quantified expressions,
+you can still access the old behavior by specifying the
+{ref}<code>--allow_solidity_calls_in_quantifiers</code> argument to <code>certoraRun</code> on the 
+command line.</p>
+<h2>Method variable restrictions</h2>
+<p>Starting with <code>certora-cli</code> version 5.0, you cannot declare new {ref}<code>method
+variables &lt;method-type&gt;</code> anywhere except the top-level body of a rule.
+Declaring new <code>method</code> variables inside of <code>if</code> statements, hook bodies, CVL
+function bodies, preserved blocks, and all other contexts are all disallowed.</p>
+<p>You can still pass <code>method</code>-type variables as arguments to CVL functions and
+definitions.  You can use this feature to rewrite CVL functions that formerly
+declared new <code>method</code> variables.</p>
+<p>For example, before <code>certora-cli</code> 5.0, the following CVL function was valid:</p>
+<p>```cvl
+function call_arbitrary() {
+    method f; env e; calldataarg args;
+    f(e, args);
+}</p>
+<p>rule r {
+    call_arbitrary();
+    assert true;
+}
+```</p>
+<p>The declaration of <code>f</code> inside of <code>call_arbitrary</code> is now disallowed, so <code>f</code> must
+be passed into <code>call_arbitrary</code> instead of declared within it:</p>
+<p>```cvl
+function call_arbitrary(method f) {
+    env e; calldataarg args;
+    f(e,args);
+}</p>
+<p>rule r {
+    method f;
+    call_arbitrary(f);
+    assert true;
+}
+```</p>
+<h2>New <code>DELETE</code> summary syntax</h2>
+<p>The syntax of the {ref}<code>new `DELETE` keyword &lt;delete-summary&gt;</code> in summaries
+has changed.  Prior to <code>certora-cli</code> 5.0, it was possible to call methods
+summarized with <code>DELETE</code> summaries from spec, and the user had to annotate the
+<code>DELETE</code> modifier to indicate how those calls should be treated.</p>
+<p>Starting with <code>certora-cli</code> 5.0, calling methods that have been summarized with
+a <code>DELETE</code> summary is disallowed, and the <code>DELETE</code> annotation requires no
+additional annotation.</p>
+<h2>CLI changes: New Parametric Contracts Attribute</h2>
+<p>As mentioned above the attribute <code>parametric_contracts</code> was added to <code>certora-cli</code> 5.0. 
+The attribute accepts the parametric contracts as a list of strings. 
+The attribute can be set as the CLI flag <code>--parametric_contracts</code> or in a <code>.conf</code> file.</p>
+<p><strong>Example</strong>
+CLI:</p>
+<p><code>certoraRun C1.sol C2.sol C3.sol --parametric_contracts C1 C3 ...</code></p>
+<p>Configuration file:</p>
+<p><code>"files": [ "C1", "C2", "C3"],
+"parametric_contracts": [ "C1", "C3"],
+...</code></p>
+<h2>CLI changes: End of CVL1 Deprecation period</h2>
+<p>With the release of <code>certora-cli</code> version 5.0, we stop supporting
+the CVL1 attributes that were deprecated during the transition to CVL2. 
+You can find the list of the deprecated attributes <a href="https://docs.certora.com/en/latest/docs/cvl/cvl2/changes.html?highlight=cvl2#changes-to-the-command-line-interface-cli">here</a>.</p>
+<html><head><meta content="https://github.com/Certora/Documentation/blob/master/cvl/v5-changes.md" name="url"/><meta content="No Title Found" name="title"/><meta content="Certora CLI 5.0 Changes
+The release of certora-cli version 5.0 introduces a few small breaking
+changes for CVL.  These changes improve the coverage for parametric rules and
+invariants, disallow Solidi" name="text"/></head><body><h1>Certora CLI 5.0 Changes</h1>
+<p>The release of <code>certora-cli</code> version 5.0 introduces a few small breaking
+changes for CVL.  These changes improve the coverage for parametric rules and
+invariants, disallow Solidity function calls in quantified expressions,
+and simplify some rarely-used features.  This document explains those changes
+and how to work with them.</p>
+<p><code>{note}
+`certora-cli` 5.0 also includes several new features, bug fixes, and
+performance improvements that are not discussed here; see {ref}`prover-release-notes`
+for more details.
+</code></p>
+<p><code>{contents}
+</code></p>
+<h2>Exhaustive parametric rules</h2>
+<p>Starting with <code>certora-cli</code> version 5.0, {term}<code>parametric rule</code>s and
+{term}<code>invariant</code>s will now be checked on the methods of all contracts by
+default, instead of just the primary contract.</p>
+<p>This change improves the coverage of rules and can catch important errors.  For
+example, an invariant that relates a contract's total supply to its balance in
+an underlying token contract could be invalidated by calling methods directly on
+the underlying token; before this change those violations would not have been
+detected.</p>
+<p>This change can break existing specifications in a few ways:</p>
+<ul>
+<li><p>A property that should hold cannot be verified.</p></li>
+<li><p>A parametric rule that was never intended to apply to secondary contracts
+may be violated by methods of those contracts.</p></li>
+<li><p>Verification may time out on methods of secondary contracts.</p></li>
+</ul>
+<p>The remainder of this section describes how to address these three failure
+modes.</p>
+<p><code>{contents}
+:local:
+</code></p>
+<h3>Fixing properties that should hold</h3>
+<p>Most parametric rules and all invariants encode general properties of a system
+that should be impossible for any contract to violate.  For example, consider a
+"solvency" invariant that shows that a vault contract holds enough underlying
+tokens to cover any withdrawals:</p>
+<p><code>cvl
+invariant solvency()
+    underlying.balanceOf(currentContract) &gt;= currentContract.totalSupply();
+</code></p>
+<p>Any violation of this property would be an important security vulnerability,
+regardless of whether it is violated by a method of the vault or a method of
+the underlying token.  Therefore, it is important to check that no method of
+any contract can violate these kinds of properties.  However, sometimes
+verifying these kinds of properties on methods of secondary contracts will
+require additional work.</p>
+<p>Continuing the solvency example, the Prover is likely to find a violation of
+the solvency rule in <code>underlying.transferFrom</code> where the vault contract has
+given an allowance to a third party.  If a third party has an allowance, it
+will be able to reduce the vault's balance by transferring the vault's tokens
+to itself.</p>
+<p>This violation represents an important vulnerability: if the vault mismanages
+its allowances, then it may become insolvent.  This violation shows that the
+solvency of the vault depends on the correct management of its underlying
+allowances.</p>
+<p>Therefore, to get the rule to pass, we will need to add another invariant
+stating that the vault manages its allowances correctly:</p>
+<p><code>cvl
+invariant no_vault_allowance()
+    underlying.allowance(currentContract) == 0;
+</code></p>
+<p>We can then use this invariant in the <code>preserved</code> block for the original
+solvency rule.  We are also likely to get violations from the case that the
+vault contract itself calls methods on the underlying contract, so we rule that
+out as well[^call-note]:</p>
+<p>behaviors. If the vault does call methods on the underlying contract, it will
+  only do so from its code, and that call will be analyzed while the Prover is
+  verifying the calling method.  The additional requirement only rules out
+  spurious counterexamples where the vault makes calls to the underlying token
+  without having code that does so.</p>
+<p><code>cvl
+invariant solvency()
+    underlying.balanceOf(currentContract) &gt;= currentContract.totalSupply()
+    {
+        preserved with (env e) {
+            require e.msg.sender != currentContract;
+            requireInvariant no_vault_allowance();
+        }
+    }
+</code></p>
+<p>There is nothing new about this process of identifying violations and adding
+new invariants as necessary; it is the same process you would use for analyzing
+any violation.  This example just shows that some work may be required when
+verifying old specifications with <code>certora-cli</code> 5.0.</p>
+<p>The benefit is that by checking methods on secondary contracts, the Prover
+forces us to consider a previously unstated assumptions about the contract and
+write invariants that could detect important security vulnerabilities.  For
+this reason, you are encouraged to identify and prove additional invariants
+to address counterexamples instead of using the filtering techniques described
+in the following sections.</p>
+<h3>Filtering properties that should not be checked</h3>
+<p>Some parametric rules encode properties that are only expected to hold on a
+specific contract.  For example, you might have a rule that ensures that every
+successful method invocation is correctly authorized:</p>
+<p>```cvl
+rule authorization_check(method f)
+filtered { f -&gt; f.isView }
+{
+    env e; calldataarg args;</p>
+<pre><code>f(e,args);
+
+assert is_authorized(e.msg.sender, f.selector);
+</code></pre>
+<p>}
+```</p>
+<p>There is no reason to expect this property to hold on any contract besides the
+main contract.</p>
+<p>To handle cases like these, <code>certora-cli</code> 5.0 introduces two new ways to filter
+methods to a specific contract.</p>
+<p>The first and simplest way to restrict verification to a specific contract is
+to call the <code>method</code> object with a specific receiver contract:</p>
+<p>```{code-block} cvl
+:emphasize-lines: 6</p>
+<p>rule authorization_check(method f)
+filtered { f -&gt; f.isView }
+{
+    env e; calldataarg args;</p>
+<pre><code>currentContract.f(e,args);
+
+assert is_authorized(e.msg.sender, f.selector);
+</code></pre>
+<p>}
+```</p>
+<p>This syntax will add a filter that will only instantiate <code>f</code> with the methods
+of <code>currentContract</code>.  The receiver may be either <code>currentContract</code> or a
+variable introduced by a <code>using</code> clause.</p>
+<p>The second and more flexible way is to use the new <code>contract</code> property of the
+<code>method</code> variable:
+```{code-block} cvl
+:emphasize-lines: 2</p>
+<p>rule authorization_check(method f)
+filtered { f -&gt; f.isView &amp;&amp; f.contract == currentContract }
+{
+    env e; calldataarg args;</p>
+<pre><code>f(e,args);
+
+assert is_authorized(e.msg.sender, f.selector);
+</code></pre>
+<p>}
+```</p>
+<p>If <code>f</code> is a <code>method</code> variable, <code>f.contract</code> refers to the contract that contains
+the method <code>f</code>.</p>
+<p>(v5-contract-option)=</p>
+<h3>Focusing on specific contracts</h3>
+<p>If you want to focus verification on a specific contract, you can do so using
+the {ref}<code>--parametric_contracts</code> option.  This option takes a list of contracts and only
+instantiates parametric rules and invariants on methods of those contracts.</p>
+<p>You can use this option to help transition specs to <code>certora-cli</code> 5.0; if <code>C</code>
+is the main contract being verified, then passing <code>--parametric_contracts C</code> will cause
+method variables to be instantiated in the same way the would have in older
+versions.</p>
+<h2>Disallow calls to contract functions in quantified expressions</h2>
+<p>Starting with <code>certora-cli</code> version 5.0, the Prover no longer supports
+making contract method calls in quantified expression bodies by
+default.</p>
+<p>For example, given the simple contract below, you can no longer
+use the <code>method</code> <code>getI()</code> in a quantified expression body.</p>
+<p>```{code-block} solidity
+contract example {</p>
+<p>uint i; </p>
+<p>function getI() public view returns (uint256) {
+       return i;
+   }
+}
+```</p>
+<p>```{code-block} cvl
+:emphasize-lines: 4</p>
+<p>rule there_exists {
+    // Using getI() in the quantified body will now cause the Prover to
+    // generate a type-checking error.
+    require (exists uint256 i . i == getI());
+    assert false, "Prover will generate an error before this line";
+}
+```</p>
+<p>In the example rule <code>there_exists</code>, the Prover will now generate an error similar
+to the following:</p>
+<p><code>text
+Error in spec file (test2.spec:8:36): Contract function calls such as getI()
+are disallowed inside quantified formulas.
+</code></p>
+<p>In most simple cases, you can replace contract method calls with either a
+{ref}direct storage access &lt;...&gt; or a {ref}ghost <ghosts>. For example the
+above function <code>getI</code> simply returns the storage variable <code>i</code> and you can
+change the <code>require</code> statement in the <code>there_exists</code> rule to use storage access:
+<code>require (exists uint i . i == currentContract.i)</code>. To use a ghost, declare
+the ghost and the hook that populates the ghost with the current value of
+the contract variable <code>i</code>.</ghosts></p>
+<p>```{code-block} cvl
+ghost uint gI;</p>
+<p>hook Sstore i uint256 v {
+    gI = v;
+}
+```</p>
+<p>Finally, replace <code>getI</code> in the <code>require</code> statement in rule <code>there_exists</code> with the
+ghost variable <code>gI</code>: <code>require (exists uint i . i == gI)</code>.</p>
+<p>If you must use contract method calls in quantified expressions,
+you can still access the old behavior by specifying the
+{ref}<code>--allow_solidity_calls_in_quantifiers</code> argument to <code>certoraRun</code> on the 
+command line.</p>
+<h2>Method variable restrictions</h2>
+<p>Starting with <code>certora-cli</code> version 5.0, you cannot declare new {ref}<code>method
+variables &lt;method-type&gt;</code> anywhere except the top-level body of a rule.
+Declaring new <code>method</code> variables inside of <code>if</code> statements, hook bodies, CVL
+function bodies, preserved blocks, and all other contexts are all disallowed.</p>
+<p>You can still pass <code>method</code>-type variables as arguments to CVL functions and
+definitions.  You can use this feature to rewrite CVL functions that formerly
+declared new <code>method</code> variables.</p>
+<p>For example, before <code>certora-cli</code> 5.0, the following CVL function was valid:</p>
+<p>```cvl
+function call_arbitrary() {
+    method f; env e; calldataarg args;
+    f(e, args);
+}</p>
+<p>rule r {
+    call_arbitrary();
+    assert true;
+}
+```</p>
+<p>The declaration of <code>f</code> inside of <code>call_arbitrary</code> is now disallowed, so <code>f</code> must
+be passed into <code>call_arbitrary</code> instead of declared within it:</p>
+<p>```cvl
+function call_arbitrary(method f) {
+    env e; calldataarg args;
+    f(e,args);
+}</p>
+<p>rule r {
+    method f;
+    call_arbitrary(f);
+    assert true;
+}
+```</p>
+<h2>New <code>DELETE</code> summary syntax</h2>
+<p>The syntax of the {ref}<code>new `DELETE` keyword &lt;delete-summary&gt;</code> in summaries
+has changed.  Prior to <code>certora-cli</code> 5.0, it was possible to call methods
+summarized with <code>DELETE</code> summaries from spec, and the user had to annotate the
+<code>DELETE</code> modifier to indicate how those calls should be treated.</p>
+<p>Starting with <code>certora-cli</code> 5.0, calling methods that have been summarized with
+a <code>DELETE</code> summary is disallowed, and the <code>DELETE</code> annotation requires no
+additional annotation.</p>
+<h2>CLI changes: New Parametric Contracts Attribute</h2>
+<p>As mentioned above the attribute <code>parametric_contracts</code> was added to <code>certora-cli</code> 5.0. 
+The attribute accepts the parametric contracts as a list of strings. 
+The attribute can be set as the CLI flag <code>--parametric_contracts</code> or in a <code>.conf</code> file.</p>
+<p><strong>Example</strong>
+CLI:</p>
+<p><code>certoraRun C1.sol C2.sol C3.sol --parametric_contracts C1 C3 ...</code></p>
+<p>Configuration file:</p>
+<p><code>"files": [ "C1", "C2", "C3"],
+"parametric_contracts": [ "C1", "C3"],
+...</code></p>
+<h2>CLI changes: End of CVL1 Deprecation period</h2>
+<p>With the release of <code>certora-cli</code> version 5.0, we stop supporting
+the CVL1 attributes that were deprecated during the transition to CVL2. 
+You can find the list of the deprecated attributes <a href="https://docs.certora.com/en/latest/docs/cvl/cvl2/changes.html?highlight=cvl2#changes-to-the-command-line-interface-cli">here</a>.</p>
+</body></html>

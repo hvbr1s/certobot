@@ -1,0 +1,83 @@
+<p><code>{role} cvl(code)
+:language: cvl
+</code></p>
+<p><code>{role} solidity(code)
+:language: solidity
+</code></p>
+<p>(producing-examples)=</p>
+<h1>Producing Positive Examples</h1>
+<p>Sometimes it is useful to produce examples of an expected behavior instead of
+counterexamples that demonstrate unexpected behavior.  You can do this by
+writing a rule that uses {ref}<code>satisfy</code> instead of the <code>assert</code> command.  For
+each <code>satisfy</code> command in a rule, the Prover will produce an example that makes
+the condition true, or report an error.</p>
+<p>The purpose of the <code>satisfy</code> statement is to produce examples that demonstrate
+some execution of the code.  Not every example is interesting — users
+should inspect the example to ensure that it demonstrates the expected
+behavior.</p>
+<p>For {clink}<code>example &lt;/DEFI/ConstantProductPool/certora/spec/ConstantProductPool.spec&gt;</code>,
+we may be interested in showing that it is
+possible for someone to deposit some assets into a pool and then immediately
+withdraw them.  The following rule demonstrates this scenario:</p>
+<p><code>{cvlinclude} /Examples/DEFI/ConstantProductPool/certora/spec/ConstantProductPool.spec
+:cvlobject: possibleToFullyWithdraw
+:caption: Positive example
+</code></p>
+<p>The Prover will produce an example that satisfies this condition.
+Sometimes the example will be uninteresting, such as having
+{cvl}<code>amount == 0</code> in the example for {cvl}<code>possibleToFullyWithdraw</code>.
+In such cases we need to strengthen the conditions in order
+to produce more interesting examples.
+In {cvl}<code>possibleToFullyWithdraw</code> we added a
+{cvl}<code>require amount &gt; 0;</code> statement to prevent such a case.</p>
+<p>Alternatively, we could have strengthened the {cvl}<code>satisfy</code>
+condition by adding</p>
+<p><code>cvl
+    satisfy (amount &gt; 0) &amp;&amp; ...
+</code></p>
+<html><head><meta content="https://github.com/Certora/Documentation/blob/master/user-guide/satisfy.md" name="url"/><meta content="No Title Found" name="title"/><meta content="{role} cvl(code)
+:language: cvl
+
+{role} solidity(code)
+:language: solidity
+
+(producing-examples)=
+Producing Positive Examples
+Sometimes it is useful to produce examples of an expected behavior instead" name="text"/></head><body><p><code>{role} cvl(code)
+:language: cvl
+</code></p>
+<p><code>{role} solidity(code)
+:language: solidity
+</code></p>
+<p>(producing-examples)=</p>
+<h1>Producing Positive Examples</h1>
+<p>Sometimes it is useful to produce examples of an expected behavior instead of
+counterexamples that demonstrate unexpected behavior.  You can do this by
+writing a rule that uses {ref}<code>satisfy</code> instead of the <code>assert</code> command.  For
+each <code>satisfy</code> command in a rule, the Prover will produce an example that makes
+the condition true, or report an error.</p>
+<p>The purpose of the <code>satisfy</code> statement is to produce examples that demonstrate
+some execution of the code.  Not every example is interesting — users
+should inspect the example to ensure that it demonstrates the expected
+behavior.</p>
+<p>For {clink}<code>example &lt;/DEFI/ConstantProductPool/certora/spec/ConstantProductPool.spec&gt;</code>,
+we may be interested in showing that it is
+possible for someone to deposit some assets into a pool and then immediately
+withdraw them.  The following rule demonstrates this scenario:</p>
+<p><code>{cvlinclude} /Examples/DEFI/ConstantProductPool/certora/spec/ConstantProductPool.spec
+:cvlobject: possibleToFullyWithdraw
+:caption: Positive example
+</code></p>
+<p>The Prover will produce an example that satisfies this condition.
+Sometimes the example will be uninteresting, such as having
+{cvl}<code>amount == 0</code> in the example for {cvl}<code>possibleToFullyWithdraw</code>.
+In such cases we need to strengthen the conditions in order
+to produce more interesting examples.
+In {cvl}<code>possibleToFullyWithdraw</code> we added a
+{cvl}<code>require amount &gt; 0;</code> statement to prevent such a case.</p>
+<p>Alternatively, we could have strengthened the {cvl}<code>satisfy</code>
+condition by adding</p>
+<p><code>cvl
+    satisfy (amount &gt; 0) &amp;&amp; ...
+</code></p>
+</body></html>

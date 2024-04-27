@@ -1,0 +1,443 @@
+<p>(glossary)=</p>
+<h1>Glossary</h1>
+<p>````{glossary}</p>
+<p>axiom
+  a statement accepted as true without proof.</p>
+<p>call trace
+  TODO</p>
+<p>CFG
+control flow graph
+control flow path
+  Control flow graphs (short: CFGs) are a program representation that 
+  illustrates in which order the program's instructions are processed during 
+  program execution. 
+  The nodes in a control flow graph represent single non-branching sequences 
+  of commands. The edges in a control flow graph represent the possibility of 
+  control passing from the last command of the source node to the first 
+  command of the target node. For instance, an <code>if</code>-statement in the program
+  will lead to a branching, i.e., a node with two outgoing edges, in the 
+  control flow graph.
+  A CVL rule can be seen as a program with some extra "assert" commands, thus 
+  a rule has a CFG like regular programs.
+  The Certora Prover's <a href="tac-reports">TAC reports</a> contain a control flow graph 
+  of the {term}<code>TAC</code> intermediate representation of each given CVL rule.
+  The control flow paths are the paths from source to sink in a given CFG.
+  In general (and in practice) the number of control flow paths grows 
+  exponentially with the size of the CFG. This is known as the path explosion 
+  problem.
+  Further reading: 
+  <a href="https://en.wikipedia.org/wiki/Control-flow_graph">Wikipedia: Control-flow graph</a>
+<a href="https://en.wikipedia.org/wiki/Path_explosion">Wikipedia: Path explosion problem</a></p>
+<p>% TODO: ok to mention TAC here?</p>
+<p>environment
+  The environment of a method call refers to the global variables that solidity
+  provides, including <code>msg</code>, <code>block</code>, and <code>tx</code>.  CVL represents these variables
+  in a structure of type {ref}<code>env &lt;env&gt;</code>.  The environment does <em>not</em> include
+  the contract state or the state of other contracts --- these are referred to
+  as the {ref}<code>storage &lt;storage-type&gt;</code>.</p>
+<p>EVM
+Ethereum Virtual Machine
+EVM bytecode
+  EVM is short for Ethereum Virtual Machine.
+  EVM bytecode is one of the source languages that the Certora Prover internally
+  can take as input for verification. It is produced by the Solidity and Vyper 
+  compilers, among others.
+  For details on what the EVM is and how it works, the following links provide
+  good entry points.
+  <a href="https://ethereum.org/en/developers/docs/evm/">Official documentation</a>,
+  <a href="https://en.wikipedia.org/wiki/Ethereum#Virtual_machine">Wikipedia</a></p>
+<p>EVM memory
+EVM storage
+  The {term}<code>EVM</code> has two major concepts of memory, called <em>memory</em> and 
+  <em>storage</em>. In brief, memory variables keep data only for the duration of a 
+  single EVM transaction, while storage variables are stored persistently in 
+  the Ethereum blockchain.
+  <a href="https://ethereum.org/en/developers/docs/smart-contracts/anatomy">Official documentation</a></p>
+<p>havoc
+  In some cases, the Certora Prover should assume that some variables can change 
+  in an unknown way.  For example, an external function on an unknown contract 
+  may have an arbitrary effect on the state of a third contract.  In this case, 
+  we say that the variable was "havoced".  See {ref}<code>havoc-summary</code> and
+  {ref}<code>havoc-stmt</code> for more details.</p>
+<p>hyperproperty
+  A hyperproperty describes a relationship between two hypothetical sequences
+  of operations starting from the same initial state.  For example, a statement
+  like "two small deposits will have the same effect as one large deposit" is a
+  hyperproperty.  See {ref}<code>storage-type</code> for more details.</p>
+<p>invariant
+  An invariant (or representation invariant) is a property of the contract
+  state that is expected to hold between invocations of contract methods.  See
+  {ref}<code>invariants</code>.</p>
+<p>model
+example
+counterexample
+witness example
+  We use the terms "model" and "example" interchangeably.
+  In the context of a CVL rule, they refer to an assignment of values to all of 
+  the CVL variables and contract storage that either violates an <code>assert</code> 
+  statement or fulfills a <code>satisfy</code> statement. 
+  In the <code>assert</code> case, we also call the model a "counterexample". In the 
+  <code>satisfy</code> case, we also call the model "witness example".
+  See {ref}<code>rule-overview</code>.
+  In the context of {term}<code>SMT solver</code>s, a model is a valuation of the logical 
+  constants and uninterpreted functions in the input formula that makes the formula
+  evaluate to <code>true</code>, also see {term}<code>SAT result</code>.</p>
+<p>linear arithmetic
+nonlinear arithmetic
+  An arithmetic expression is called linear if it consists only of additions, 
+  subtractions, and multiplications by constant. Division and modulo where the
+  second parameter is a constant are also linear arithmetic.
+  Examples for linear expressions are <code>x * 3</code>, <code>x / 3</code>, <code>5 * (x + 3 * y)</code>.
+  Every arithmetic expression that is not linear is nonlinear.
+  Examples for nonlinear expressions are <code>x * y</code>, <code>x * (1 + y)</code>, <code>x * x</code>, 
+  <code>3 / x</code>, <code>3 ^ x</code>.</p>
+<p>overapproximation
+underapproximation
+  Sometimes it is useful to replace a complex piece of code with something
+  simpler that is easier to reason about.  If the approximation includes all of
+  the possible behaviors of the original code (and possibly others), it is
+  called an "overapproximation"; if it does not then it is called an
+  "underapproximation".  </p>
+<p>Example: A {ref}<code>NONDET &lt;view-summary&gt;</code> summary is
+  an overapproximation because every possible value that the original
+  implementation could return is considered by the Certora Prover, while an
+  {ref}<code>ALWAYS &lt;view-summary&gt;</code> summary is an underapproximation if the
+  summarized method could return more than one value.</p>
+<p>Proofs on overapproximated programs are {term}<code>sound</code>, but there may be
+  spurious {term}<code>counterexample</code>s caused by behavior that the original code
+  did not exhibit.  Underapproximations are more dangerous because a property
+  that is successfully verified on the underapproximation may not hold on the
+  approximated code.</p>
+<p>parametric rule
+  A parametric rule is a rule that calls an ambiguous method, either using a
+  method variable, or using an overloaded function name. The Certora Prover 
+  will generate a separate report for each possible instantiation of the method.
+  See {ref}<code>parametric-rules</code> for more information.</p>
+<p>quantifier
+quantified expression
+  The symbols <code>forall</code> and <code>exist</code> are sometimes referred to as <em>quantifiers</em>,
+  and expressions of the form <code>forall type v . e</code> and <code>exist type v . e</code> are
+  referred to as <em>quantified expressions</em>.  See {ref}<code>logic-exprs</code> for
+  details about quantifiers in CVL.</p>
+<p>sanity
+  <code>{todo}
+  This section is incomplete.  See {ref}`--rule_sanity` and {ref}`built-in-sanity` for partial information.
+</code></p>
+<p>SAT
+UNSAT
+SAT result
+UNSAT result
+  <em>SAT</em> and <em>UNSAT</em> are the results that an {term}<code>SMT solver</code> returns on a 
+  successful run (i.e. not a timeout). SAT means that the input formula is 
+  satisfiable and a {term}<code>model</code> has been found. UNSAT means that the input 
+  formula is unsatisfiable (and thus there is no model for it).
+  Within the Certora Prover, what SAT means depends on the type of rule 
+  being checked: For an <code>assert</code> rule, SAT means the rule is violated and the 
+  SMT model corresponds to a counterexample.
+  For a <code>satisfy</code> rule, SAT means the rule is not violated and the SMT model
+  corresponds to a witness example.
+  Conversely, UNSAT means that an <code>assert</code> is never violated or a <code>satisfy</code> never
+  fulfilled respectively.
+  See also {ref}<code>rule-overview</code>.</p>
+<p>scene
+  The <em>scene</em> refers to the set of contract instances that the Certora Prover 
+  knows about.</p>
+<p>SMT
+SMT solver
+  "SMT" is short for "Satisfiability Modulo Theories". An SMT solver takes as 
+  input a formula in predicate logic and returns whether the formula is 
+  satisfiable (short "SAT") or unsatisfiable (short: "UNSAT"). The "Modulo 
+  Theory" part means that the solver assumes a meaning for certain symbols in 
+  the formula. For instance the theory of integer arithmetic stipulates that the 
+  symbols <code>+</code>, <code>-</code>, <code>*</code>, etc. have their regular everyday mathematical 
+  meaning.
+  When the formula is satisfiable, the SMT solver can also return a model for 
+  the formula. I.e. an assignment of the formula's variables that makes the 
+  formula evaluate to "true". For instance, on the formula "x &gt; 5 /\ x = y * y", 
+  a solver will return SAT, and produce any valuation where x is the square of
+  an integer and larger than 5, and y is the root of x.
+  Further reading: <a href="https://en.wikipedia.org/wiki/Satisfiability_modulo_theories">Wikipedia</a></p>
+<p>sound
+unsound
+  Soundness means that any rule violations in the code being verified are
+  guaranteed to be reported by the Certora Prover.  Unsound approximations 
+  such as loop unrolling or certain kinds of harnessing may cause real bugs 
+  to be missed by the Prover, and should therefore be used with caution. See
+  {doc}<code>/docs/prover/approx/index</code> for more details.</p>
+<p>split
+split leaf
+split leaves
+  Control flow splitting is a technique to speed up verification by splitting the
+  program into smaller parts and verifying them separately. These smaller programs 
+  are called splits. Splits that cannot be split further are called split leaves.
+  See {ref}<code>control-flow-splitting</code>.</p>
+<p>summary
+summarize
+  A method summary is a user-provided approximation of the behavior of a
+  contract method.  Summaries are useful if the implementation of a method is
+  not available or if the implementation is too complex for the Certora 
+  Prover to analyze without timing out.  See {doc}<code>/docs/cvl/methods</code> for
+  complete information on different types of method summaries.</p>
+<p>TAC
+  TAC (originally short for "three address code") is an intermediate 
+  representation
+  (<a href="https://en.wikipedia.org/wiki/Intermediate_representation">Wikipedia</a>)
+  used by the Certora Prover. TAC code is kept invisible to the 
+  user most of the time, so its details are not in the scope of this 
+  documentation. We provide a working understanding, which is helpful for some 
+  advanced proving tasks, in the {ref}<code>tac-reports</code> section.</p>
+<p>tautology
+  A tautology is a logical statement that is always true.</p>
+<p>vacuous
+vacuity
+  A logical statement is <em>vacuous</em> if it is technically true but only because
+  it doesn't say anything.  For example, "every integer that is both greater
+  than 5 and less than 3 is a perfect square" is technically true, but only
+  because there are no numbers that are both greater than 5 and less than 3.</p>
+<p>Similarly, a rule or assertion can pass, but only because the <code>require</code>
+  statements rule out all of the {term}<code>model</code>s.  In this case, the rule
+  doesn't say anything about the program being verified.
+  The {doc}<code>../prover/checking/sanity</code> help detect vacuous rules.</p>
+<p>verification condition
+  The Certora Prover works by translating a program an a specification into 
+  a single logical formula that is satisfiable if and only if the program
+  violates the specification. This formula is called a 
+  <em>verification condition</em>.
+  Usually, a run of the Certora Prover generates many verification conditions.
+  For instance a verification condition is generated for every 
+  {term}<code>parametric rule</code>, and also for each of the sanity checks triggered by 
+  {ref}<code>--rule_sanity</code>.
+  See also {ref}<code>white-paper</code>, {ref}<code>user-guide</code>.</p>
+<p>wildcard
+exact
+  A methods block entry that explicitly uses <code>_</code> as a receiver is a <em>wildcard
+  entry</em>; all other entries are called <em>exact entries</em>.  See
+  {doc}<code>/docs/cvl/methods</code>.</p>
+<p>````</p>
+<html><head><meta content="https://github.com/Certora/Documentation/blob/master/user-guide/glossary.md" name="url"/><meta content="No Title Found" name="title"/><meta content="(glossary)=
+Glossary
+````{glossary}
+axiom
+  a statement accepted as true without proof.
+call trace
+  TODO
+CFG
+control flow graph
+control flow path
+  Control flow graphs (short: CFGs) are a program rep" name="text"/></head><body><p>(glossary)=</p>
+<h1>Glossary</h1>
+<p>````{glossary}</p>
+<p>axiom
+  a statement accepted as true without proof.</p>
+<p>call trace
+  TODO</p>
+<p>CFG
+control flow graph
+control flow path
+  Control flow graphs (short: CFGs) are a program representation that 
+  illustrates in which order the program's instructions are processed during 
+  program execution. 
+  The nodes in a control flow graph represent single non-branching sequences 
+  of commands. The edges in a control flow graph represent the possibility of 
+  control passing from the last command of the source node to the first 
+  command of the target node. For instance, an <code>if</code>-statement in the program
+  will lead to a branching, i.e., a node with two outgoing edges, in the 
+  control flow graph.
+  A CVL rule can be seen as a program with some extra "assert" commands, thus 
+  a rule has a CFG like regular programs.
+  The Certora Prover's <a href="tac-reports">TAC reports</a> contain a control flow graph 
+  of the {term}<code>TAC</code> intermediate representation of each given CVL rule.
+  The control flow paths are the paths from source to sink in a given CFG.
+  In general (and in practice) the number of control flow paths grows 
+  exponentially with the size of the CFG. This is known as the path explosion 
+  problem.
+  Further reading: 
+  <a href="https://en.wikipedia.org/wiki/Control-flow_graph">Wikipedia: Control-flow graph</a>
+<a href="https://en.wikipedia.org/wiki/Path_explosion">Wikipedia: Path explosion problem</a></p>
+<p>% TODO: ok to mention TAC here?</p>
+<p>environment
+  The environment of a method call refers to the global variables that solidity
+  provides, including <code>msg</code>, <code>block</code>, and <code>tx</code>.  CVL represents these variables
+  in a structure of type {ref}<code>env &lt;env&gt;</code>.  The environment does <em>not</em> include
+  the contract state or the state of other contracts --- these are referred to
+  as the {ref}<code>storage &lt;storage-type&gt;</code>.</p>
+<p>EVM
+Ethereum Virtual Machine
+EVM bytecode
+  EVM is short for Ethereum Virtual Machine.
+  EVM bytecode is one of the source languages that the Certora Prover internally
+  can take as input for verification. It is produced by the Solidity and Vyper 
+  compilers, among others.
+  For details on what the EVM is and how it works, the following links provide
+  good entry points.
+  <a href="https://ethereum.org/en/developers/docs/evm/">Official documentation</a>,
+  <a href="https://en.wikipedia.org/wiki/Ethereum#Virtual_machine">Wikipedia</a></p>
+<p>EVM memory
+EVM storage
+  The {term}<code>EVM</code> has two major concepts of memory, called <em>memory</em> and 
+  <em>storage</em>. In brief, memory variables keep data only for the duration of a 
+  single EVM transaction, while storage variables are stored persistently in 
+  the Ethereum blockchain.
+  <a href="https://ethereum.org/en/developers/docs/smart-contracts/anatomy">Official documentation</a></p>
+<p>havoc
+  In some cases, the Certora Prover should assume that some variables can change 
+  in an unknown way.  For example, an external function on an unknown contract 
+  may have an arbitrary effect on the state of a third contract.  In this case, 
+  we say that the variable was "havoced".  See {ref}<code>havoc-summary</code> and
+  {ref}<code>havoc-stmt</code> for more details.</p>
+<p>hyperproperty
+  A hyperproperty describes a relationship between two hypothetical sequences
+  of operations starting from the same initial state.  For example, a statement
+  like "two small deposits will have the same effect as one large deposit" is a
+  hyperproperty.  See {ref}<code>storage-type</code> for more details.</p>
+<p>invariant
+  An invariant (or representation invariant) is a property of the contract
+  state that is expected to hold between invocations of contract methods.  See
+  {ref}<code>invariants</code>.</p>
+<p>model
+example
+counterexample
+witness example
+  We use the terms "model" and "example" interchangeably.
+  In the context of a CVL rule, they refer to an assignment of values to all of 
+  the CVL variables and contract storage that either violates an <code>assert</code> 
+  statement or fulfills a <code>satisfy</code> statement. 
+  In the <code>assert</code> case, we also call the model a "counterexample". In the 
+  <code>satisfy</code> case, we also call the model "witness example".
+  See {ref}<code>rule-overview</code>.
+  In the context of {term}<code>SMT solver</code>s, a model is a valuation of the logical 
+  constants and uninterpreted functions in the input formula that makes the formula
+  evaluate to <code>true</code>, also see {term}<code>SAT result</code>.</p>
+<p>linear arithmetic
+nonlinear arithmetic
+  An arithmetic expression is called linear if it consists only of additions, 
+  subtractions, and multiplications by constant. Division and modulo where the
+  second parameter is a constant are also linear arithmetic.
+  Examples for linear expressions are <code>x * 3</code>, <code>x / 3</code>, <code>5 * (x + 3 * y)</code>.
+  Every arithmetic expression that is not linear is nonlinear.
+  Examples for nonlinear expressions are <code>x * y</code>, <code>x * (1 + y)</code>, <code>x * x</code>, 
+  <code>3 / x</code>, <code>3 ^ x</code>.</p>
+<p>overapproximation
+underapproximation
+  Sometimes it is useful to replace a complex piece of code with something
+  simpler that is easier to reason about.  If the approximation includes all of
+  the possible behaviors of the original code (and possibly others), it is
+  called an "overapproximation"; if it does not then it is called an
+  "underapproximation".  </p>
+<p>Example: A {ref}<code>NONDET &lt;view-summary&gt;</code> summary is
+  an overapproximation because every possible value that the original
+  implementation could return is considered by the Certora Prover, while an
+  {ref}<code>ALWAYS &lt;view-summary&gt;</code> summary is an underapproximation if the
+  summarized method could return more than one value.</p>
+<p>Proofs on overapproximated programs are {term}<code>sound</code>, but there may be
+  spurious {term}<code>counterexample</code>s caused by behavior that the original code
+  did not exhibit.  Underapproximations are more dangerous because a property
+  that is successfully verified on the underapproximation may not hold on the
+  approximated code.</p>
+<p>parametric rule
+  A parametric rule is a rule that calls an ambiguous method, either using a
+  method variable, or using an overloaded function name. The Certora Prover 
+  will generate a separate report for each possible instantiation of the method.
+  See {ref}<code>parametric-rules</code> for more information.</p>
+<p>quantifier
+quantified expression
+  The symbols <code>forall</code> and <code>exist</code> are sometimes referred to as <em>quantifiers</em>,
+  and expressions of the form <code>forall type v . e</code> and <code>exist type v . e</code> are
+  referred to as <em>quantified expressions</em>.  See {ref}<code>logic-exprs</code> for
+  details about quantifiers in CVL.</p>
+<p>sanity
+  <code>{todo}
+  This section is incomplete.  See {ref}`--rule_sanity` and {ref}`built-in-sanity` for partial information.
+</code></p>
+<p>SAT
+UNSAT
+SAT result
+UNSAT result
+  <em>SAT</em> and <em>UNSAT</em> are the results that an {term}<code>SMT solver</code> returns on a 
+  successful run (i.e. not a timeout). SAT means that the input formula is 
+  satisfiable and a {term}<code>model</code> has been found. UNSAT means that the input 
+  formula is unsatisfiable (and thus there is no model for it).
+  Within the Certora Prover, what SAT means depends on the type of rule 
+  being checked: For an <code>assert</code> rule, SAT means the rule is violated and the 
+  SMT model corresponds to a counterexample.
+  For a <code>satisfy</code> rule, SAT means the rule is not violated and the SMT model
+  corresponds to a witness example.
+  Conversely, UNSAT means that an <code>assert</code> is never violated or a <code>satisfy</code> never
+  fulfilled respectively.
+  See also {ref}<code>rule-overview</code>.</p>
+<p>scene
+  The <em>scene</em> refers to the set of contract instances that the Certora Prover 
+  knows about.</p>
+<p>SMT
+SMT solver
+  "SMT" is short for "Satisfiability Modulo Theories". An SMT solver takes as 
+  input a formula in predicate logic and returns whether the formula is 
+  satisfiable (short "SAT") or unsatisfiable (short: "UNSAT"). The "Modulo 
+  Theory" part means that the solver assumes a meaning for certain symbols in 
+  the formula. For instance the theory of integer arithmetic stipulates that the 
+  symbols <code>+</code>, <code>-</code>, <code>*</code>, etc. have their regular everyday mathematical 
+  meaning.
+  When the formula is satisfiable, the SMT solver can also return a model for 
+  the formula. I.e. an assignment of the formula's variables that makes the 
+  formula evaluate to "true". For instance, on the formula "x &gt; 5 /\ x = y * y", 
+  a solver will return SAT, and produce any valuation where x is the square of
+  an integer and larger than 5, and y is the root of x.
+  Further reading: <a href="https://en.wikipedia.org/wiki/Satisfiability_modulo_theories">Wikipedia</a></p>
+<p>sound
+unsound
+  Soundness means that any rule violations in the code being verified are
+  guaranteed to be reported by the Certora Prover.  Unsound approximations 
+  such as loop unrolling or certain kinds of harnessing may cause real bugs 
+  to be missed by the Prover, and should therefore be used with caution. See
+  {doc}<code>/docs/prover/approx/index</code> for more details.</p>
+<p>split
+split leaf
+split leaves
+  Control flow splitting is a technique to speed up verification by splitting the
+  program into smaller parts and verifying them separately. These smaller programs 
+  are called splits. Splits that cannot be split further are called split leaves.
+  See {ref}<code>control-flow-splitting</code>.</p>
+<p>summary
+summarize
+  A method summary is a user-provided approximation of the behavior of a
+  contract method.  Summaries are useful if the implementation of a method is
+  not available or if the implementation is too complex for the Certora 
+  Prover to analyze without timing out.  See {doc}<code>/docs/cvl/methods</code> for
+  complete information on different types of method summaries.</p>
+<p>TAC
+  TAC (originally short for "three address code") is an intermediate 
+  representation
+  (<a href="https://en.wikipedia.org/wiki/Intermediate_representation">Wikipedia</a>)
+  used by the Certora Prover. TAC code is kept invisible to the 
+  user most of the time, so its details are not in the scope of this 
+  documentation. We provide a working understanding, which is helpful for some 
+  advanced proving tasks, in the {ref}<code>tac-reports</code> section.</p>
+<p>tautology
+  A tautology is a logical statement that is always true.</p>
+<p>vacuous
+vacuity
+  A logical statement is <em>vacuous</em> if it is technically true but only because
+  it doesn't say anything.  For example, "every integer that is both greater
+  than 5 and less than 3 is a perfect square" is technically true, but only
+  because there are no numbers that are both greater than 5 and less than 3.</p>
+<p>Similarly, a rule or assertion can pass, but only because the <code>require</code>
+  statements rule out all of the {term}<code>model</code>s.  In this case, the rule
+  doesn't say anything about the program being verified.
+  The {doc}<code>../prover/checking/sanity</code> help detect vacuous rules.</p>
+<p>verification condition
+  The Certora Prover works by translating a program an a specification into 
+  a single logical formula that is satisfiable if and only if the program
+  violates the specification. This formula is called a 
+  <em>verification condition</em>.
+  Usually, a run of the Certora Prover generates many verification conditions.
+  For instance a verification condition is generated for every 
+  {term}<code>parametric rule</code>, and also for each of the sanity checks triggered by 
+  {ref}<code>--rule_sanity</code>.
+  See also {ref}<code>white-paper</code>, {ref}<code>user-guide</code>.</p>
+<p>wildcard
+exact
+  A methods block entry that explicitly uses <code>_</code> as a receiver is a <em>wildcard
+  entry</em>; all other entries are called <em>exact entries</em>.  See
+  {doc}<code>/docs/cvl/methods</code>.</p>
+<p>````</p>
+</body></html>

@@ -1,0 +1,179 @@
+<p>(unrolling)=</p>
+<h1>Loop Unrolling</h1>
+<p>One of the approximations applied by the Certora Prover is loop unrolling.
+Loops in the contract are replaced by multiple copies of their bodies.
+if the Prover detects that a loop has a constant number of iterations, this loop is unrolled
+as many times as the constant.</p>
+<p>For example, for the loop:
+<code>solidity
+for (uint i = 0; i &lt; 3; i++)
+        j++;
+</code>
+the Prover can determine that the loop always runs 3 times, so the loop will be replaced by
+<code>solidity
+j++;
+j++;
+j++;
+</code>
+If the Prover cannot easily determine the number of loop iterations, it will unroll it a fixed number of times. The default number is 1, but it can be configured using
+the {ref}<code>--loop_iter</code> flag.</p>
+<p>For example, consider the following solidity function:</p>
+<p><code>solidity
+/// @notice: `slow_copy(n)` always returns `n`
+function slow_copy(uint n) returns uint {
+    uint j = 0;
+    for (uint i = 0; i &lt; n; i++)
+        j++;
+    return j;
+}
+</code></p>
+<p>With <code>--loop_iter 2</code>, the loop in <code>slow_copy</code> will be approximated by two copies of its
+body:</p>
+<p>```solidity
+function slow<em>copy</em>unrolled(uint n) returns uint {
+    uint j = 0;</p>
+<pre><code>uint i = 0;
+if (i &lt; n) {
+    j++;
+    i++;
+    if (i &lt; n) {
+        j++;
+        i++;
+    }
+}
+
+return j;
+</code></pre>
+<p>}
+```</p>
+<p>If a particular example would cause the loop to run more than twice, then the
+loop guard (<code>i &lt; n</code> in the example) would still be true at the end of the loop.</p>
+<p>The Prover has two options for handling examples that would execute the loop
+too many times:</p>
+<ul>
+<li><p>In <strong>pessimistic mode</strong> (the default), the Prover will report an example
+that executes the loop too many times as a violation of the "loop unwinding
+condition" rule.  In pessimistic mode, any rule run on <code>slow_copy(n)</code> would
+report a violation with <code>n = 3</code>.</p>
+<p>Pessimistic mode is {term}<code>sound</code>, because there may be rule
+violations in the original code that only occur when the loop runs more than
+3 times, and loop unrolling would cause those violations to be missed.  For
+example, the original function <code>slow_copy</code> should not satisfy the following rule:</p>
+<p><code>cvl
+rule bogus_rule(uint n) {
+    assert slow_copy(n) &lt; 5, "slow_copy always returns something less than 5";
+}
+</code></p>
+<p>but any violation would require 5 or more iterations of the loop.  The loop
+unwinding violation notifies the user that this rule might not hold.</p></li>
+<li><p>In <strong>optimistic mode</strong> (enabled by passing the {ref}<code>--optimistic_loop</code> option),
+the Prover <em>ignores</em> any examples that would cause the loop to execute
+too many times.  In optimistic mode, the rule <code>bogus_rule</code> above would be
+reported as passing.</p>
+<p><code>{caution}
+Optimistic mode is {term}`unsound` since it may miss counterexamples like
+these.  It should be used with care since it may hide bugs.
+</code></p>
+<p>Despite the unsoundness, optimistic mode is quite useful in practice.  For
+example, it allows us to document that <code>slow_copy</code> satisfies the
+specification given in its documentation:</p>
+<p><code>cvl
+rule slow_copy_correct(uint n) {
+    assert slow_copy(n) == n, "slow_copy(n) always returns n";
+}
+</code></p>
+<p>In optimistic mode, this rule will pass (as it should), but in pessimistic
+mode it will fail if <code>n &gt; 2</code>.</p></li>
+</ul>
+<html><head><meta content="https://github.com/Certora/Documentation/blob/master/prover/approx/loops.md" name="url"/><meta content="No Title Found" name="title"/><meta content="(unrolling)=
+Loop Unrolling
+One of the approximations applied by the Certora Prover is loop unrolling.
+Loops in the contract are replaced by multiple copies of their bodies.
+if the Prover detects that" name="text"/></head><body><p>(unrolling)=</p>
+<h1>Loop Unrolling</h1>
+<p>One of the approximations applied by the Certora Prover is loop unrolling.
+Loops in the contract are replaced by multiple copies of their bodies.
+if the Prover detects that a loop has a constant number of iterations, this loop is unrolled
+as many times as the constant.</p>
+<p>For example, for the loop:
+<code>solidity
+for (uint i = 0; i &lt; 3; i++)
+        j++;
+</code>
+the Prover can determine that the loop always runs 3 times, so the loop will be replaced by
+<code>solidity
+j++;
+j++;
+j++;
+</code>
+If the Prover cannot easily determine the number of loop iterations, it will unroll it a fixed number of times. The default number is 1, but it can be configured using
+the {ref}<code>--loop_iter</code> flag.</p>
+<p>For example, consider the following solidity function:</p>
+<p><code>solidity
+/// @notice: `slow_copy(n)` always returns `n`
+function slow_copy(uint n) returns uint {
+    uint j = 0;
+    for (uint i = 0; i &lt; n; i++)
+        j++;
+    return j;
+}
+</code></p>
+<p>With <code>--loop_iter 2</code>, the loop in <code>slow_copy</code> will be approximated by two copies of its
+body:</p>
+<p>```solidity
+function slow<em>copy</em>unrolled(uint n) returns uint {
+    uint j = 0;</p>
+<pre><code>uint i = 0;
+if (i &lt; n) {
+    j++;
+    i++;
+    if (i &lt; n) {
+        j++;
+        i++;
+    }
+}
+
+return j;
+</code></pre>
+<p>}
+```</p>
+<p>If a particular example would cause the loop to run more than twice, then the
+loop guard (<code>i &lt; n</code> in the example) would still be true at the end of the loop.</p>
+<p>The Prover has two options for handling examples that would execute the loop
+too many times:</p>
+<ul>
+<li><p>In <strong>pessimistic mode</strong> (the default), the Prover will report an example
+that executes the loop too many times as a violation of the "loop unwinding
+condition" rule.  In pessimistic mode, any rule run on <code>slow_copy(n)</code> would
+report a violation with <code>n = 3</code>.</p>
+<p>Pessimistic mode is {term}<code>sound</code>, because there may be rule
+violations in the original code that only occur when the loop runs more than
+3 times, and loop unrolling would cause those violations to be missed.  For
+example, the original function <code>slow_copy</code> should not satisfy the following rule:</p>
+<p><code>cvl
+rule bogus_rule(uint n) {
+    assert slow_copy(n) &lt; 5, "slow_copy always returns something less than 5";
+}
+</code></p>
+<p>but any violation would require 5 or more iterations of the loop.  The loop
+unwinding violation notifies the user that this rule might not hold.</p></li>
+<li><p>In <strong>optimistic mode</strong> (enabled by passing the {ref}<code>--optimistic_loop</code> option),
+the Prover <em>ignores</em> any examples that would cause the loop to execute
+too many times.  In optimistic mode, the rule <code>bogus_rule</code> above would be
+reported as passing.</p>
+<p><code>{caution}
+Optimistic mode is {term}`unsound` since it may miss counterexamples like
+these.  It should be used with care since it may hide bugs.
+</code></p>
+<p>Despite the unsoundness, optimistic mode is quite useful in practice.  For
+example, it allows us to document that <code>slow_copy</code> satisfies the
+specification given in its documentation:</p>
+<p><code>cvl
+rule slow_copy_correct(uint n) {
+    assert slow_copy(n) == n, "slow_copy(n) always returns n";
+}
+</code></p>
+<p>In optimistic mode, this rule will pass (as it should), but in pessimistic
+mode it will fail if <code>n &gt; 2</code>.</p></li>
+</ul>
+</body></html>

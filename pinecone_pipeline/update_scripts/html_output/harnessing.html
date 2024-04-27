@@ -1,0 +1,70 @@
+<h1>Harnessing</h1>
+<p>Occasionally, CVL lacks a feature that is necessary for a complete verification
+of a contract.  We are working to extend the feature set of CVL to cover these
+cases, but in the mean time we have developed a set of workarounds that we
+refer to as "harnesses".</p>
+<h2>Example:</h2>
+<p>Consider a scenario where we want to write a unit test for an internal functions of a contract. The contract serves as a workaround, allowing us to call original functions rather than relying on summarized implementations. </p>
+<p>```solidity
+contract ExampleHarnessing is ExampleHarnessingGetter {
+    constructor(Configuration memory config) ExampleHarnessingGetter(config) { }</p>
+<pre><code>// External wrapper for accrueInternal
+function call_accrueInternal() external {
+    return super.accrueInternal();
+}
+
+// External wrapper for getNowInternal
+function call_getNowInternal() external view returns (uint40) {
+    return super.getNowInternal();
+}
+
+// Compute the n-th power of 10
+function powerOfTen(uint8 n) public pure returns (uint64){
+    return uint64(uint64(10) ** n);
+}
+</code></pre>
+<p>}
+```
+for more details checkout the <a href="https://github.com/Certora/comet/blob/certora/certora/harness/CometHarnessWrappers.sol">source code</a></p>
+<p>Here's a brief overview:</p>
+<h3>unit test internal functions</h3>
+<p><code>call_accrueInternal</code> and <code>call_getNowInternal</code>: External wrappers facilitating access to internal functions like <code>accrueInternal</code> and <code>getNowInternal</code>.</p>
+<h3>define complex functionally  (view/pure)</h3>
+<p><code>powerOfTen</code>: A utility function to compute the n-th power of 10.</p>
+<html><head><meta content="https://github.com/Certora/Documentation/blob/master/prover/approx/harnessing.md" name="url"/><meta content="Harnessing" name="title"/><meta content="Harnessing
+Occasionally, CVL lacks a feature that is necessary for a complete verification
+of a contract.  We are working to extend the feature set of CVL to cover these
+cases, but in the mean time we" name="text"/></head><body><h1>Harnessing</h1>
+<p>Occasionally, CVL lacks a feature that is necessary for a complete verification
+of a contract.  We are working to extend the feature set of CVL to cover these
+cases, but in the mean time we have developed a set of workarounds that we
+refer to as "harnesses".</p>
+<h2>Example:</h2>
+<p>Consider a scenario where we want to write a unit test for an internal functions of a contract. The contract serves as a workaround, allowing us to call original functions rather than relying on summarized implementations. </p>
+<p>```solidity
+contract ExampleHarnessing is ExampleHarnessingGetter {
+    constructor(Configuration memory config) ExampleHarnessingGetter(config) { }</p>
+<pre><code>// External wrapper for accrueInternal
+function call_accrueInternal() external {
+    return super.accrueInternal();
+}
+
+// External wrapper for getNowInternal
+function call_getNowInternal() external view returns (uint40) {
+    return super.getNowInternal();
+}
+
+// Compute the n-th power of 10
+function powerOfTen(uint8 n) public pure returns (uint64){
+    return uint64(uint64(10) ** n);
+}
+</code></pre>
+<p>}
+```
+for more details checkout the <a href="https://github.com/Certora/comet/blob/certora/certora/harness/CometHarnessWrappers.sol">source code</a></p>
+<p>Here's a brief overview:</p>
+<h3>unit test internal functions</h3>
+<p><code>call_accrueInternal</code> and <code>call_getNowInternal</code>: External wrappers facilitating access to internal functions like <code>accrueInternal</code> and <code>getNowInternal</code>.</p>
+<h3>define complex functionally  (view/pure)</h3>
+<p><code>powerOfTen</code>: A utility function to compute the n-th power of 10.</p>
+</body></html>

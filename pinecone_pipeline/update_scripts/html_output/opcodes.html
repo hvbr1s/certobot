@@ -1,0 +1,191 @@
+<p>(using-opcodes)=</p>
+<h1>Using Opcode Hooks</h1>
+<p>{ref}<code>opcode-hooks</code> are useful for reasoning about the low-level behavior of
+your contracts, and for accessing EVM state that is otherwise unavailable in
+CVL.  This guide gives a few examples of how opcode hooks can be used.</p>
+<p><code>{contents}
+</code></p>
+<h2>Accessing environment variables</h2>
+<p>In CVL, you can access EVM variables like <code>msg.sender</code> using an
+{ref}<code>environment object &lt;env&gt;</code>.  However, <code>env</code> objects do not contain all of
+the EVM state that is available to contracts.</p>
+<p>We made this choice for a few reasons: for one, it would be annoying to have to
+manually specify that global constants like the chain ID are same in every
+transaction.  Another is that we have tried to decouple CVL from EVM as much as
+possible.</p>
+<p>Nevertheless, sometimes you need access to EVM variables that are not included
+in the <code>env</code> type, such as the <code>CHAINID</code> or <code>GASPRICE</code>.  You can use opcode
+hooks on the corresponding instructions to restrict these values or save them
+in {ref}<code>ghost-variables</code> for use in rules.</p>
+<p>% TODO: make an actual example in the examples repo</p>
+<p>For example, if your contract uses <code>chainid()</code> to detect whether it is running
+on the Ethereum Mainnet, you could ensure that the chain ID is always 1 (which
+is the Ethereum Mainnet chain ID) by adding the following hook:
+<code>cvl
+hook CHAINID uint id {
+    require id == 1;
+}
+</code></p>
+<p>Alternatively, you could save the chain ID in a ghost variable and then use it
+in your rule:
+```cvl
+ghost uint chain<em>id;
+hook CHAINID uint id {
+    chain</em>id = id;
+}</p>
+<p>/// The contract's behavior changes appropriately when run on mainnet
+rule chainid<em>behavior</em>correct {
+    ...
+    if (chain_id == 1) {
+        ...
+    } else {
+        ...
+    }
+}
+```</p>
+<h2>Detecting <code>CALL</code> instructions</h2>
+<p>Suppose you want to ensure that a specific contract function never makes an
+external call while it is in an emergency shutdown mode.  In order to verify
+this property, you need to know whether the contract has made a call.</p>
+<p>You can use a hook on the <code>CALL</code> opcode to write such a rule:
+```cvl
+ghost bool made_call;</p>
+<p>hook CALL(uint g, address addr, uint value, uint argsOffset, uint argsLength, uint retOffset, uint retLength) uint rc {
+    made_call = true;
+}</p>
+<p>/// While in <code>emergencyMode</code>, no function can make an external call.
+rule no<em>call</em>during<em>emergency {
+    require !made</em>call;
+    require emergencyMode();</p>
+<pre><code>method f; env e; calldataarg args;
+f(e, args);
+
+assert !made_call;
+</code></pre>
+<p>}
+```</p>
+<p>In this example, the <code>made_call</code> variable gets set to <code>true</code> whenever the
+contract executes the <code>CALL</code> opcode, which is used to make external calls.  The
+rule simply asserts that this variable is <code>false</code> (note that we required
+<code>!made_call</code> to avoid counterexamples where <code>made_call</code> started out set).</p>
+<p>% TODO:
+% Reasoning about new contracts
+% -----------------------------
+% Using the <code>CREATE1</code> and <code>CREATE2</code> opcode hooks
+% 
+% Detecting events
+% ----------------
+% Using the <code>LOGn</code> opcodes.
+%
+% ## Using call hooks
+% 
+% <code>{todo}
+% Ensure that the `ecrecover` function is checked whenever the signed transaction
+% function changes a balance
+%</code>
+% 
+% ### Call hooks or summarization?
+% 
+% <code>{todo}
+% Now we have hooks on calls and also summaries that can call contract functions;
+% these do similar things.  Which is the recommended way / what are the tradeoffs?
+%</code>
+% </p>
+<html><head><meta content="https://github.com/Certora/Documentation/blob/master/user-guide/opcodes.md" name="url"/><meta content="No Title Found" name="title"/><meta content="(using-opcodes)=
+Using Opcode Hooks
+{ref}opcode-hooks are useful for reasoning about the low-level behavior of
+your contracts, and for accessing EVM state that is otherwise unavailable in
+CVL.  This g" name="text"/></head><body><p>(using-opcodes)=</p>
+<h1>Using Opcode Hooks</h1>
+<p>{ref}<code>opcode-hooks</code> are useful for reasoning about the low-level behavior of
+your contracts, and for accessing EVM state that is otherwise unavailable in
+CVL.  This guide gives a few examples of how opcode hooks can be used.</p>
+<p><code>{contents}
+</code></p>
+<h2>Accessing environment variables</h2>
+<p>In CVL, you can access EVM variables like <code>msg.sender</code> using an
+{ref}<code>environment object &lt;env&gt;</code>.  However, <code>env</code> objects do not contain all of
+the EVM state that is available to contracts.</p>
+<p>We made this choice for a few reasons: for one, it would be annoying to have to
+manually specify that global constants like the chain ID are same in every
+transaction.  Another is that we have tried to decouple CVL from EVM as much as
+possible.</p>
+<p>Nevertheless, sometimes you need access to EVM variables that are not included
+in the <code>env</code> type, such as the <code>CHAINID</code> or <code>GASPRICE</code>.  You can use opcode
+hooks on the corresponding instructions to restrict these values or save them
+in {ref}<code>ghost-variables</code> for use in rules.</p>
+<p>% TODO: make an actual example in the examples repo</p>
+<p>For example, if your contract uses <code>chainid()</code> to detect whether it is running
+on the Ethereum Mainnet, you could ensure that the chain ID is always 1 (which
+is the Ethereum Mainnet chain ID) by adding the following hook:
+<code>cvl
+hook CHAINID uint id {
+    require id == 1;
+}
+</code></p>
+<p>Alternatively, you could save the chain ID in a ghost variable and then use it
+in your rule:
+```cvl
+ghost uint chain<em>id;
+hook CHAINID uint id {
+    chain</em>id = id;
+}</p>
+<p>/// The contract's behavior changes appropriately when run on mainnet
+rule chainid<em>behavior</em>correct {
+    ...
+    if (chain_id == 1) {
+        ...
+    } else {
+        ...
+    }
+}
+```</p>
+<h2>Detecting <code>CALL</code> instructions</h2>
+<p>Suppose you want to ensure that a specific contract function never makes an
+external call while it is in an emergency shutdown mode.  In order to verify
+this property, you need to know whether the contract has made a call.</p>
+<p>You can use a hook on the <code>CALL</code> opcode to write such a rule:
+```cvl
+ghost bool made_call;</p>
+<p>hook CALL(uint g, address addr, uint value, uint argsOffset, uint argsLength, uint retOffset, uint retLength) uint rc {
+    made_call = true;
+}</p>
+<p>/// While in <code>emergencyMode</code>, no function can make an external call.
+rule no<em>call</em>during<em>emergency {
+    require !made</em>call;
+    require emergencyMode();</p>
+<pre><code>method f; env e; calldataarg args;
+f(e, args);
+
+assert !made_call;
+</code></pre>
+<p>}
+```</p>
+<p>In this example, the <code>made_call</code> variable gets set to <code>true</code> whenever the
+contract executes the <code>CALL</code> opcode, which is used to make external calls.  The
+rule simply asserts that this variable is <code>false</code> (note that we required
+<code>!made_call</code> to avoid counterexamples where <code>made_call</code> started out set).</p>
+<p>% TODO:
+% Reasoning about new contracts
+% -----------------------------
+% Using the <code>CREATE1</code> and <code>CREATE2</code> opcode hooks
+% 
+% Detecting events
+% ----------------
+% Using the <code>LOGn</code> opcodes.
+%
+% ## Using call hooks
+% 
+% <code>{todo}
+% Ensure that the `ecrecover` function is checked whenever the signed transaction
+% function changes a balance
+%</code>
+% 
+% ### Call hooks or summarization?
+% 
+% <code>{todo}
+% Now we have hooks on calls and also summaries that can call contract functions;
+% these do similar things.  Which is the recommended way / what are the tradeoffs?
+%</code>
+% </p>
+</body></html>

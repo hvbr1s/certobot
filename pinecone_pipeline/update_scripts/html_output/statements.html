@@ -1,0 +1,528 @@
+<h1>Statements</h1>
+<p>The bodies of {doc}<code>rules &lt;rules&gt;</code>, {doc}<code>functions &lt;functions&gt;</code>, and
+{doc}<code>hooks &lt;hooks&gt;</code> in CVL are made up of statements.  Statements describe the
+steps that are simulated by the Prover when evaluating a rule.</p>
+<p>Statements in CVL are similar to statements in Solidity, although there are
+some differences; see {ref}<code>control-flow</code>.  This document lists the available
+CVL commands.</p>
+<p><code>{contents}
+</code></p>
+<h2>Syntax</h2>
+<p>The syntax for statements in CVL is given by the following <a href="ebnf-syntax">EBNF grammar</a>:</p>
+<p>```
+block ::= statement { statement }</p>
+<p>statement ::= type id [ "=" expr ] ";"</p>
+<pre><code>        | "require" expr ";"
+        | "static_require" expr ";"
+        | "assert" expr [ "," string ] ";"
+        | "static_assert" expr [ "," string ] ";"
+        | "satisfy" expr [ "," string ] ";"
+
+        | "requireInvariant" id "(" exprs ")" ";"
+
+        | lhs "=" expr ";"
+        | "if" expr statement [ "else" statement ]
+        | "{" block "}"
+        | "return" [ expr ] ";"
+
+        | function_call ";"
+        | "call" id "(" exprs ")" ";"
+        | "invoke_fallback" "(" exprs ")" ";"
+        | "invoke_whole" "(" exprs ")" ";"
+        | "reset_storage" expr ";"
+
+        | "havoc" id [ "assuming" expr ] ";"
+</code></pre>
+<p>lhs ::= id [ "[" expr "]" ] [ "," lhs ]
+```</p>
+<p>See {doc}<code>basics</code> for the <code>id</code> and <code>string</code> productions.  See {doc}<code>types</code> for
+the <code>type</code> production.  See {doc}<code>expr</code> for the <code>expr</code> and <code>function_call</code> productions.</p>
+<p>(declarations)=</p>
+<h2>Variable declarations</h2>
+<p>Unlike undefined variables in most programming languages, undefined variables
+in CVL are a centrally important language feature.  If a variable is declared
+but not defined, the Prover will generate {term}<code>models &lt;model&gt;</code> with every
+possible value of the undefined variable.</p>
+<p>Undefined variables in CVL behave the same way as {ref}<code>rule parameters
+&lt;rule-overview&gt;</code>.</p>
+<p>When the Prover reports a counterexample that violates a rule, the values of the
+variables declared in the rule are displayed in the report.  Variables declared
+in CVL functions are not currently visible in the report.</p>
+<p>(require)=</p>
+<h2><code>assert</code> and <code>require</code></h2>
+<p>The <code>assert</code> and <code>require</code> commands are similar to the corresponding statements
+in Solidity.  The <code>require</code> statement is used to specify the preconditions for
+a rule, while the <code>assert</code> statement is used to specify the expected behavior
+of contract functions.</p>
+<p>During verification, the Prover will ignore any {term}<code>model</code> that causes the
+<code>require</code> expressions to evaluate to false.  Unlike Solidity, the <code>require</code>
+statement does not contain a descriptive message, because the Prover will never
+consider an example where the <code>require</code> statement evaluates to <code>false</code>.</p>
+<p>The <code>assert</code> statements define the expected behavior of contract functions.  If
+it is possible to generate a model that causes the <code>assert</code> expression to
+evaluate to <code>false</code>, the Prover will construct one of them and report a
+violation.</p>
+<p>Assert conditions may be followed by a message string describing the condition;
+this message will be included in the reported violation.</p>
+<p><code>{note}
+Unlike Solidity's `assert` and `require`, the CVL syntax for `assert` and
+`require` does not require parentheses around the expression and message.
+</code></p>
+<h3>Examples</h3>
+<p>```cvl
+rule withdraw_succeeds {
+    env e; // env represents the bytecode environment passed on every call
+    // invoke function withdraw and assume that it does not revert
+    bool success = withdraw(e);  // e is passed as an additional argument
+    assert success, "withdraw must succeed"; // verify that withdraw succeeded
+}</p>
+<p>rule totalFundsAfterDeposit(uint256 amount) {
+     env e;</p>
+<pre><code> deposit(e, amount);
+
+ uint256 userFundsAfter = getFunds(e, e.msg.sender);
+ uint256 totalAfter = getTotalFunds(e);
+
+ // Verify that the total funds of the system is at least the current funds of the msg.sender.
+ assert totalAfter &gt;= userFundsAfter;
+</code></pre>
+<p>}</p>
+<p>``<code>
+- [</code>assert` example](https://github.com/Certora/Examples/blob/14668d39a6ddc67af349bc5b82f73db73349ef18/CVLByExample/ConstantProductPool/certora/spec/ConstantProductPool.spec#L75)</p>
+<ul>
+<li><a href="https://github.com/Certora/Examples/blob/14668d39a6ddc67af349bc5b82f73db73349ef18/CVLByExample/ConstantProductPool/certora/spec/ConstantProductPool.spec#L44"><code>require</code> example</a></li>
+</ul>
+<p>(satisfy)=</p>
+<h2><code>satisfy</code> statements</h2>
+<p>A <code>satisfy</code> statement is used to check that the rule can be executed in such a
+way that the <code>satisfy</code> statement is true.  A rule with a <code>satisfy</code> statement is
+describing a scenario and must not contain <code>assert</code> statements.  We require that
+each rule ends with either a <code>satisfy</code> statement or an <code>assert</code> statement.</p>
+<p>See {ref}<code>producing-examples</code> for an example demonstrating the <code>satisfy</code>
+command.</p>
+<p>For each <code>satisfy</code> statement, the Certora verifier will produce a witness for a
+valid execution of the rule.  It will show an execution trace containing values
+for each input variable and each state variable where all <code>require</code> and <code>satisfy</code>
+statements are executed successfully.  In case there is no such execution, for
+example if the <code>require</code> statements are already inconsistent or if a solidity
+function always reverts, an error is reported.</p>
+<p>If the rule contains multiple <code>satisfy</code> statements, then all executed <code>satisfy</code>
+statements must hold.   However, a <code>satisfy</code> statement on a conditional branch
+that is not executed does not need to hold.</p>
+<p>If at least one <code>satisfy</code> statement is not satisfiable an error is reported.
+If all <code>satisfy</code> statements can be fulfilled on at least one path, the rule
+succeeds.</p>
+<p><code>{note}
+A success only guarantees that there is some satisfying execution starting in
+some arbitrary state.  It is not possible to check that every possible starting
+state has an execution that satisfies the condition.
+</code></p>
+<ul>
+<li><a href="https://github.com/Certora/Examples/blob/14668d39a6ddc67af349bc5b82f73db73349ef18/CVLByExample/ConstantProductPool/certora/spec/ConstantProductPool.spec#L243"><code>satisfy</code> example</a></li>
+</ul>
+<p>(requireInvariant)=</p>
+<h2><code>requireInvariant</code> statements</h2>
+<p><code>requireInvariant</code> is shorthand for <code>require</code> of the expression of the invariant where the invariant parameters have to be substituted with the values/ variables for which the invariant should hold.</p>
+<ul>
+<li><a href="https://github.com/Certora/Examples/blob/14668d39a6ddc67af349bc5b82f73db73349ef18/CVLByExample/ConstantProductPool/certora/spec/ConstantProductPool.spec#L178"><code>requireInvariant</code> example</a></li>
+</ul>
+<p><code>{note}
+`requireInvariant` is always safe for invariants that have been proved, even in
+`preserved` blocks; see {ref}`invariant-induction` for a detailed explanation.
+</code></p>
+<p>(havoc-stmt)=</p>
+<h2>Havoc Statements</h2>
+<p>Havoc statements introduce non-determinism into the contract execution, allowing the SMT solver to choose random values for specific variables. Havoc statements are helpful for modeling uncertainty and verifying a wider range of possible scenarios.</p>
+<h3>Syntax</h3>
+<p>The syntax for a <code>havoc</code> statement is as follows:</p>
+<p><code>cvl
+havoc identifier [ assuming condition ];
+</code></p>
+<ul>
+<li><strong><code>identifier</code>:</strong> The variable or expression for which non-deterministic values will be chosen.</li>
+<li><strong><code>condition</code>:</strong> An optional condition that restricts the possible values for the havoc variable.</li>
+</ul>
+<h3>Usage</h3>
+<h4>Basic Havoc</h4>
+<p>The basic use of a havoc statement involves introducing non-deterministic values for a specific variable. This is useful when the exact value of a variable is unknown or when exploring various scenarios.</p>
+<h5>Example:</h5>
+<p><code>cvl
+uint256 x;
+havoc x;
+</code></p>
+<p>In this example, the value of variable <code>x</code> is chosen randomly by the SMT solver.
+<strong>Note:</strong> The havoc statement is not really necessary as unassigned values are havoc by default.</p>
+<h4>Havoc with Condition</h4>
+<p>Havoc statements can include a condition that restricts the possible values for the havoc variable. This allows for more fine-grained control over the non-deterministic choices made by the SMT solver.</p>
+<h5>Example:</h5>
+<p><code>cvl
+uint256 y;
+havoc y assuming y &gt; 10;
+</code></p>
+<p>In this example, the havoc statement introduces non-deterministic values for variable <code>y</code>, but only values greater than 10 are considered valid.</p>
+<p><strong>Note:</strong> The above is equivalent to:
+<code>cvl
+uint256 y;
+require y &gt; 0;
+</code></p>
+<h3>Two-State Contexts: <code>@old</code> and <code>@new</code></h3>
+<p>Two-state contexts, denoted by <code>@old</code> and <code>@new</code>, are essential when dealing with havoc statements. They provide a mechanism to reference the old and new states of a variable within the havoc statement, allowing for more nuanced control over the non-deterministic choices.</p>
+<h4>Example:</h4>
+<p><code>cvl
+havoc sumAllBalance assuming sumAllBalance@new() == sumAllBalance@old() + balance - old_balance;
+</code></p>
+<p>In the given example, the havoc statement introduces non-deterministic values for the variable <code>sumAllBalance</code>. The assuming clause adds a condition: the new state of <code>sumAllBalance</code> should be the old state plus the change in the balance variable.</p>
+<p><code>sumAllBalance@new()</code>: Value in the updated state.
+<code>sumAllBalance@old()</code>: Value in the previous state.
+<code>balance - old_balance</code>: Change in the balance variable.</p>
+<p><code>{note} 
+{doc}`hooks` will not be triggered for havoc statements. That is, if there is a hook defined on load, or store, of the `sumAllBalance` variable,
+it will not be triggered from the havoc statement. 
+</code></p>
+<h3>Advanced Usage: <code>havoc assuming</code></h3>
+<p>The <code>havoc assuming</code> construct allows introducing non-deterministic choices for variables while imposing specific conditions. This can be particularly useful for modeling complex scenarios where certain constraints must be satisfied.</p>
+<h4>Example:</h4>
+<p><code>cvl
+ghost uint256 a;
+ghost uint256 b;
+rule example(){
+havoc a assuming a@new &lt; b;
+havoc b assuming a + b@new == 100;
+assert a &lt; b &amp;&amp; a + b == 100;
+}
+</code></p>
+<p>In this example, havoc statements are used to introduce non-deterministic values for ghosts <code>a</code> and <code>b</code> while ensuring that <code>a</code> is less than <code>b</code> and their sum is equal to 100.</p>
+<h3>Conclusion</h3>
+<p>Havoc statements play a critical role in making CVL specifications more expressive and capable of handling uncertainty. They widen the coverage of possible contract behaviors making verification more robust and comprehensive. Understanding two-state contexts (<code>@old</code> and <code>@new</code>) and the <code>havoc assuming</code> construct is useful for harnessing the full power of CVL, in particular when combined with ghosts.</p>
+<p>(control-flow)=</p>
+<h2>Solidity-like Statements</h2>
+<p>Solidity-like statements provide a familiar syntax for expressing conditions and behaviors similar to Solidity, These statements enhance the readability and ease of writing specifications by adopting a syntax that resembles Solidity.</p>
+<h3>1. Assert Statement</h3>
+<h4>Syntax:</h4>
+<p><code>cvl
+assert condition;
+</code></p>
+<h4>Usage:</h4>
+<p>The <code>assert</code> statement is used to assert a condition that must be true during the execution of the contract. If the condition evaluates to false, it will trigger a verification failure.</p>
+<h5>Example:</h5>
+<p><code>cvl
+uint256 balance;
+assert balance &gt; 0;
+</code></p>
+<p>In this example, the <code>assert</code> statement ensures that the balance variable is positive.</p>
+<h3>2. Require Statement</h3>
+<h4>Syntax:</h4>
+<p><code>cvl
+require condition;
+</code></p>
+<h4>Usage:</h4>
+<p>The <code>require</code> statement is similar to the <code>assert</code> statement but is used for expressing preconditions that must be satisfied for the execution to continue. Values that make the condition evaluate to false will not be considered as violations of a later <code>assert</code> statement or witnesses to a later <code>satisfy</code> statement.</p>
+<h5>Example:</h5>
+<p><code>cvl
+uint256 amount;
+require amount &gt; 0;
+satisfy amount &gt;= 0;
+</code></p>
+<p>Here, the <code>require</code> statement ensures that the <code>amount</code> must be greater than zero. This means there cannot be a witness of the <code>satisfy</code> command with <code>amount</code> equal to zero.</p>
+<h3>3. Modeling Reverts in Solidity Calls</h3>
+<p>The default method of calling Solidity functions within CVL is to assume they do not revert.
+This behavior can be adjusted with the <code>@withrevert</code> modifier.
+After every Solidity call, even if it is not marked with <code>@withrevert</code>, a builtin variable called <code>lastReverted</code> is updated according to whether the Solidity call reverted or not.</p>
+<p>Note: For calls without <code>@withrevert</code>, <code>lastReverted</code> is automatically set to to false.</p>
+<h4>Syntax:</h4>
+<p><code>cvl
+f@withrevert(args);
+assert !lastReverted;
+</code>
+In this example, we call to <code>f</code> without pruning the reverting paths, and then we assert that the call to <code>f</code> did not revert on any given input.</p>
+<h5>Example:</h5>
+<p><code>cvl
+uint256 limit = 100;
+uint256 value;
+require value &gt; limit;
+Deposit@withrevert(value);
+assert lastReverted, "Expected revert when value exceeds limit";
+</code></p>
+<p>In this example, the <code>@withrevert</code> modifier is applied to the <code>Deposit</code> function call, which is expected to revert if the <code>value</code> exceeds the specified <code>limit</code>. The <code>assert</code> statement checks whether <code>lastReverted</code> is true, ensuring that the contract execution does revert as anticipated when the condition is violated. The error message in the <code>assert</code> provides additional context about the expectation.</p>
+<h3>4. Return Statement</h3>
+<h4>Syntax:</h4>
+<p><code>cvl
+return expression;
+</code></p>
+<h4>Usage:</h4>
+<p>The <code>return</code> statement is used to terminate the execution of a function and return a value. It can only be used in functions to specify the value to be returned.</p>
+<h5>Example:</h5>
+<p><code>cvl
+function calculateSum(uint256 a, uint256 b) returns (uint256) {
+    return a + b;
+}
+</code></p>
+<p>This example defines a function <code>calculateSum</code> that takes two parameters and returns their sum.</p>
+<h3>Conclusion</h3>
+<p>Solidity-like statements in CVL simplify the process of writing specifications by using a syntax that closely resembles Solidity. These statements align with the familiar patterns and structures used in Solidity smart contracts, making it easier for developers and auditors to express and verify the desired behaviors and conditions in a contract. Understanding and using these statements contributes to more readable and expressive CVL specifications.</p>
+<html><head><meta content="https://github.com/Certora/Documentation/blob/master/cvl/statements.md" name="url"/><meta content="Statements" name="title"/><meta content="Statements
+The bodies of {doc}rules &lt;rules&gt;, {doc}functions &lt;functions&gt;, and
+{doc}hooks &lt;hooks&gt; in CVL are made up of statements.  Statements describe the
+steps that are simulated by the Prover when e" name="text"/></head><body><h1>Statements</h1>
+<p>The bodies of {doc}<code>rules &lt;rules&gt;</code>, {doc}<code>functions &lt;functions&gt;</code>, and
+{doc}<code>hooks &lt;hooks&gt;</code> in CVL are made up of statements.  Statements describe the
+steps that are simulated by the Prover when evaluating a rule.</p>
+<p>Statements in CVL are similar to statements in Solidity, although there are
+some differences; see {ref}<code>control-flow</code>.  This document lists the available
+CVL commands.</p>
+<p><code>{contents}
+</code></p>
+<h2>Syntax</h2>
+<p>The syntax for statements in CVL is given by the following <a href="ebnf-syntax">EBNF grammar</a>:</p>
+<p>```
+block ::= statement { statement }</p>
+<p>statement ::= type id [ "=" expr ] ";"</p>
+<pre><code>        | "require" expr ";"
+        | "static_require" expr ";"
+        | "assert" expr [ "," string ] ";"
+        | "static_assert" expr [ "," string ] ";"
+        | "satisfy" expr [ "," string ] ";"
+
+        | "requireInvariant" id "(" exprs ")" ";"
+
+        | lhs "=" expr ";"
+        | "if" expr statement [ "else" statement ]
+        | "{" block "}"
+        | "return" [ expr ] ";"
+
+        | function_call ";"
+        | "call" id "(" exprs ")" ";"
+        | "invoke_fallback" "(" exprs ")" ";"
+        | "invoke_whole" "(" exprs ")" ";"
+        | "reset_storage" expr ";"
+
+        | "havoc" id [ "assuming" expr ] ";"
+</code></pre>
+<p>lhs ::= id [ "[" expr "]" ] [ "," lhs ]
+```</p>
+<p>See {doc}<code>basics</code> for the <code>id</code> and <code>string</code> productions.  See {doc}<code>types</code> for
+the <code>type</code> production.  See {doc}<code>expr</code> for the <code>expr</code> and <code>function_call</code> productions.</p>
+<p>(declarations)=</p>
+<h2>Variable declarations</h2>
+<p>Unlike undefined variables in most programming languages, undefined variables
+in CVL are a centrally important language feature.  If a variable is declared
+but not defined, the Prover will generate {term}<code>models &lt;model&gt;</code> with every
+possible value of the undefined variable.</p>
+<p>Undefined variables in CVL behave the same way as {ref}<code>rule parameters
+&lt;rule-overview&gt;</code>.</p>
+<p>When the Prover reports a counterexample that violates a rule, the values of the
+variables declared in the rule are displayed in the report.  Variables declared
+in CVL functions are not currently visible in the report.</p>
+<p>(require)=</p>
+<h2><code>assert</code> and <code>require</code></h2>
+<p>The <code>assert</code> and <code>require</code> commands are similar to the corresponding statements
+in Solidity.  The <code>require</code> statement is used to specify the preconditions for
+a rule, while the <code>assert</code> statement is used to specify the expected behavior
+of contract functions.</p>
+<p>During verification, the Prover will ignore any {term}<code>model</code> that causes the
+<code>require</code> expressions to evaluate to false.  Unlike Solidity, the <code>require</code>
+statement does not contain a descriptive message, because the Prover will never
+consider an example where the <code>require</code> statement evaluates to <code>false</code>.</p>
+<p>The <code>assert</code> statements define the expected behavior of contract functions.  If
+it is possible to generate a model that causes the <code>assert</code> expression to
+evaluate to <code>false</code>, the Prover will construct one of them and report a
+violation.</p>
+<p>Assert conditions may be followed by a message string describing the condition;
+this message will be included in the reported violation.</p>
+<p><code>{note}
+Unlike Solidity's `assert` and `require`, the CVL syntax for `assert` and
+`require` does not require parentheses around the expression and message.
+</code></p>
+<h3>Examples</h3>
+<p>```cvl
+rule withdraw_succeeds {
+    env e; // env represents the bytecode environment passed on every call
+    // invoke function withdraw and assume that it does not revert
+    bool success = withdraw(e);  // e is passed as an additional argument
+    assert success, "withdraw must succeed"; // verify that withdraw succeeded
+}</p>
+<p>rule totalFundsAfterDeposit(uint256 amount) {
+     env e;</p>
+<pre><code> deposit(e, amount);
+
+ uint256 userFundsAfter = getFunds(e, e.msg.sender);
+ uint256 totalAfter = getTotalFunds(e);
+
+ // Verify that the total funds of the system is at least the current funds of the msg.sender.
+ assert totalAfter &gt;= userFundsAfter;
+</code></pre>
+<p>}</p>
+<p>``<code>
+- [</code>assert` example](https://github.com/Certora/Examples/blob/14668d39a6ddc67af349bc5b82f73db73349ef18/CVLByExample/ConstantProductPool/certora/spec/ConstantProductPool.spec#L75)</p>
+<ul>
+<li><a href="https://github.com/Certora/Examples/blob/14668d39a6ddc67af349bc5b82f73db73349ef18/CVLByExample/ConstantProductPool/certora/spec/ConstantProductPool.spec#L44"><code>require</code> example</a></li>
+</ul>
+<p>(satisfy)=</p>
+<h2><code>satisfy</code> statements</h2>
+<p>A <code>satisfy</code> statement is used to check that the rule can be executed in such a
+way that the <code>satisfy</code> statement is true.  A rule with a <code>satisfy</code> statement is
+describing a scenario and must not contain <code>assert</code> statements.  We require that
+each rule ends with either a <code>satisfy</code> statement or an <code>assert</code> statement.</p>
+<p>See {ref}<code>producing-examples</code> for an example demonstrating the <code>satisfy</code>
+command.</p>
+<p>For each <code>satisfy</code> statement, the Certora verifier will produce a witness for a
+valid execution of the rule.  It will show an execution trace containing values
+for each input variable and each state variable where all <code>require</code> and <code>satisfy</code>
+statements are executed successfully.  In case there is no such execution, for
+example if the <code>require</code> statements are already inconsistent or if a solidity
+function always reverts, an error is reported.</p>
+<p>If the rule contains multiple <code>satisfy</code> statements, then all executed <code>satisfy</code>
+statements must hold.   However, a <code>satisfy</code> statement on a conditional branch
+that is not executed does not need to hold.</p>
+<p>If at least one <code>satisfy</code> statement is not satisfiable an error is reported.
+If all <code>satisfy</code> statements can be fulfilled on at least one path, the rule
+succeeds.</p>
+<p><code>{note}
+A success only guarantees that there is some satisfying execution starting in
+some arbitrary state.  It is not possible to check that every possible starting
+state has an execution that satisfies the condition.
+</code></p>
+<ul>
+<li><a href="https://github.com/Certora/Examples/blob/14668d39a6ddc67af349bc5b82f73db73349ef18/CVLByExample/ConstantProductPool/certora/spec/ConstantProductPool.spec#L243"><code>satisfy</code> example</a></li>
+</ul>
+<p>(requireInvariant)=</p>
+<h2><code>requireInvariant</code> statements</h2>
+<p><code>requireInvariant</code> is shorthand for <code>require</code> of the expression of the invariant where the invariant parameters have to be substituted with the values/ variables for which the invariant should hold.</p>
+<ul>
+<li><a href="https://github.com/Certora/Examples/blob/14668d39a6ddc67af349bc5b82f73db73349ef18/CVLByExample/ConstantProductPool/certora/spec/ConstantProductPool.spec#L178"><code>requireInvariant</code> example</a></li>
+</ul>
+<p><code>{note}
+`requireInvariant` is always safe for invariants that have been proved, even in
+`preserved` blocks; see {ref}`invariant-induction` for a detailed explanation.
+</code></p>
+<p>(havoc-stmt)=</p>
+<h2>Havoc Statements</h2>
+<p>Havoc statements introduce non-determinism into the contract execution, allowing the SMT solver to choose random values for specific variables. Havoc statements are helpful for modeling uncertainty and verifying a wider range of possible scenarios.</p>
+<h3>Syntax</h3>
+<p>The syntax for a <code>havoc</code> statement is as follows:</p>
+<p><code>cvl
+havoc identifier [ assuming condition ];
+</code></p>
+<ul>
+<li><strong><code>identifier</code>:</strong> The variable or expression for which non-deterministic values will be chosen.</li>
+<li><strong><code>condition</code>:</strong> An optional condition that restricts the possible values for the havoc variable.</li>
+</ul>
+<h3>Usage</h3>
+<h4>Basic Havoc</h4>
+<p>The basic use of a havoc statement involves introducing non-deterministic values for a specific variable. This is useful when the exact value of a variable is unknown or when exploring various scenarios.</p>
+<h5>Example:</h5>
+<p><code>cvl
+uint256 x;
+havoc x;
+</code></p>
+<p>In this example, the value of variable <code>x</code> is chosen randomly by the SMT solver.
+<strong>Note:</strong> The havoc statement is not really necessary as unassigned values are havoc by default.</p>
+<h4>Havoc with Condition</h4>
+<p>Havoc statements can include a condition that restricts the possible values for the havoc variable. This allows for more fine-grained control over the non-deterministic choices made by the SMT solver.</p>
+<h5>Example:</h5>
+<p><code>cvl
+uint256 y;
+havoc y assuming y &gt; 10;
+</code></p>
+<p>In this example, the havoc statement introduces non-deterministic values for variable <code>y</code>, but only values greater than 10 are considered valid.</p>
+<p><strong>Note:</strong> The above is equivalent to:
+<code>cvl
+uint256 y;
+require y &gt; 0;
+</code></p>
+<h3>Two-State Contexts: <code>@old</code> and <code>@new</code></h3>
+<p>Two-state contexts, denoted by <code>@old</code> and <code>@new</code>, are essential when dealing with havoc statements. They provide a mechanism to reference the old and new states of a variable within the havoc statement, allowing for more nuanced control over the non-deterministic choices.</p>
+<h4>Example:</h4>
+<p><code>cvl
+havoc sumAllBalance assuming sumAllBalance@new() == sumAllBalance@old() + balance - old_balance;
+</code></p>
+<p>In the given example, the havoc statement introduces non-deterministic values for the variable <code>sumAllBalance</code>. The assuming clause adds a condition: the new state of <code>sumAllBalance</code> should be the old state plus the change in the balance variable.</p>
+<p><code>sumAllBalance@new()</code>: Value in the updated state.
+<code>sumAllBalance@old()</code>: Value in the previous state.
+<code>balance - old_balance</code>: Change in the balance variable.</p>
+<p><code>{note} 
+{doc}`hooks` will not be triggered for havoc statements. That is, if there is a hook defined on load, or store, of the `sumAllBalance` variable,
+it will not be triggered from the havoc statement. 
+</code></p>
+<h3>Advanced Usage: <code>havoc assuming</code></h3>
+<p>The <code>havoc assuming</code> construct allows introducing non-deterministic choices for variables while imposing specific conditions. This can be particularly useful for modeling complex scenarios where certain constraints must be satisfied.</p>
+<h4>Example:</h4>
+<p><code>cvl
+ghost uint256 a;
+ghost uint256 b;
+rule example(){
+havoc a assuming a@new &lt; b;
+havoc b assuming a + b@new == 100;
+assert a &lt; b &amp;&amp; a + b == 100;
+}
+</code></p>
+<p>In this example, havoc statements are used to introduce non-deterministic values for ghosts <code>a</code> and <code>b</code> while ensuring that <code>a</code> is less than <code>b</code> and their sum is equal to 100.</p>
+<h3>Conclusion</h3>
+<p>Havoc statements play a critical role in making CVL specifications more expressive and capable of handling uncertainty. They widen the coverage of possible contract behaviors making verification more robust and comprehensive. Understanding two-state contexts (<code>@old</code> and <code>@new</code>) and the <code>havoc assuming</code> construct is useful for harnessing the full power of CVL, in particular when combined with ghosts.</p>
+<p>(control-flow)=</p>
+<h2>Solidity-like Statements</h2>
+<p>Solidity-like statements provide a familiar syntax for expressing conditions and behaviors similar to Solidity, These statements enhance the readability and ease of writing specifications by adopting a syntax that resembles Solidity.</p>
+<h3>1. Assert Statement</h3>
+<h4>Syntax:</h4>
+<p><code>cvl
+assert condition;
+</code></p>
+<h4>Usage:</h4>
+<p>The <code>assert</code> statement is used to assert a condition that must be true during the execution of the contract. If the condition evaluates to false, it will trigger a verification failure.</p>
+<h5>Example:</h5>
+<p><code>cvl
+uint256 balance;
+assert balance &gt; 0;
+</code></p>
+<p>In this example, the <code>assert</code> statement ensures that the balance variable is positive.</p>
+<h3>2. Require Statement</h3>
+<h4>Syntax:</h4>
+<p><code>cvl
+require condition;
+</code></p>
+<h4>Usage:</h4>
+<p>The <code>require</code> statement is similar to the <code>assert</code> statement but is used for expressing preconditions that must be satisfied for the execution to continue. Values that make the condition evaluate to false will not be considered as violations of a later <code>assert</code> statement or witnesses to a later <code>satisfy</code> statement.</p>
+<h5>Example:</h5>
+<p><code>cvl
+uint256 amount;
+require amount &gt; 0;
+satisfy amount &gt;= 0;
+</code></p>
+<p>Here, the <code>require</code> statement ensures that the <code>amount</code> must be greater than zero. This means there cannot be a witness of the <code>satisfy</code> command with <code>amount</code> equal to zero.</p>
+<h3>3. Modeling Reverts in Solidity Calls</h3>
+<p>The default method of calling Solidity functions within CVL is to assume they do not revert.
+This behavior can be adjusted with the <code>@withrevert</code> modifier.
+After every Solidity call, even if it is not marked with <code>@withrevert</code>, a builtin variable called <code>lastReverted</code> is updated according to whether the Solidity call reverted or not.</p>
+<p>Note: For calls without <code>@withrevert</code>, <code>lastReverted</code> is automatically set to to false.</p>
+<h4>Syntax:</h4>
+<p><code>cvl
+f@withrevert(args);
+assert !lastReverted;
+</code>
+In this example, we call to <code>f</code> without pruning the reverting paths, and then we assert that the call to <code>f</code> did not revert on any given input.</p>
+<h5>Example:</h5>
+<p><code>cvl
+uint256 limit = 100;
+uint256 value;
+require value &gt; limit;
+Deposit@withrevert(value);
+assert lastReverted, "Expected revert when value exceeds limit";
+</code></p>
+<p>In this example, the <code>@withrevert</code> modifier is applied to the <code>Deposit</code> function call, which is expected to revert if the <code>value</code> exceeds the specified <code>limit</code>. The <code>assert</code> statement checks whether <code>lastReverted</code> is true, ensuring that the contract execution does revert as anticipated when the condition is violated. The error message in the <code>assert</code> provides additional context about the expectation.</p>
+<h3>4. Return Statement</h3>
+<h4>Syntax:</h4>
+<p><code>cvl
+return expression;
+</code></p>
+<h4>Usage:</h4>
+<p>The <code>return</code> statement is used to terminate the execution of a function and return a value. It can only be used in functions to specify the value to be returned.</p>
+<h5>Example:</h5>
+<p><code>cvl
+function calculateSum(uint256 a, uint256 b) returns (uint256) {
+    return a + b;
+}
+</code></p>
+<p>This example defines a function <code>calculateSum</code> that takes two parameters and returns their sum.</p>
+<h3>Conclusion</h3>
+<p>Solidity-like statements in CVL simplify the process of writing specifications by using a syntax that closely resembles Solidity. These statements align with the familiar patterns and structures used in Solidity smart contracts, making it easier for developers and auditors to express and verify the desired behaviors and conditions in a contract. Understanding and using these statements contributes to more readable and expressive CVL specifications.</p>
+</body></html>

@@ -1,0 +1,355 @@
+<h1>The IterableMap Contract</h1>
+<p>The <code>IterableMap</code> will maintain an internal array of the keys inserted to the map. In the next section, we will add an iteration function.</p>
+<p>```solidity
+pragma solidity ^0.7.0;</p>
+<p>contract IterableMap {
+    mapping(uint =&gt; uint) internal map;
+    function get(uint key) public view returns(uint) { return map[key]; }</p>
+<pre><code>uint[] internal keys;
+function numOfKeys() external view returns (uint) { return keys.length; }
+
+function insert(uint key, uint value) external {
+    require(value != 0, "0 is not a valid value");
+    require (!contains(key), "key already exists");
+    map[key] = value;
+}
+
+function remove(uint key) external {
+    require (map[key] != 0, "Key does not exist");
+    map[key] = 0;
+    uint i = indexOf(key);
+    if (i &lt; keys.length - 1) {
+        keys[i] = keys[keys.length-1];
+    }
+    keys.pop();
+}
+
+function contains(uint key) internal view returns (bool) {
+    if (map[key] == 0) {
+        return false;
+    }
+
+    return true;
+}
+
+function indexOf(uint key) internal view returns (uint) {
+    for (uint i = 0 ; i &lt; keys.length ; i++) {
+        if (keys[i] == key) {
+            return i;
+        }
+    }
+    require(false, "Could not find key");
+}
+</code></pre>
+<p>}
+```</p>
+<p>We can now run the original spec file on the new contract. Unfortunately, not
+all rules are passing. The <code>inverses</code> rule is failing. The assertion message
+tells us <code>Unwinding condition in a loop</code>. It is the output whenever we
+encounter a loop that cannot be finitely unrolled. To prevent missed bugs, the
+Prover outputs an assertion error in the loop's stop condition. We
+can control how many times the loops are unrolled, and in the future, the
+Prover will also support the specification of inductive invariants for full loop
+coverage. In our example, we can start by simply assuming loops can be fully
+unrolled even if only unrolled once by specifying <code>--optimistic_loop</code> in the
+command line for running the Prover.</p>
+<p>Even then <code>inverses</code> still fails. Let's consider the call trace for this rule:</p>
+<p><img alt="" src="failure_1.png"/></p>
+<p>We see that we were able to nullify the entry in the map, but the last operation that we see in the call trace under <code>remove</code> is that we load from <code>keys</code> a value of 0. It is known that the Solidity compiler associates the storage slot of an array to its length. Here we see that the read length is 0. This means the <code>key</code> array is empty. However, it shouldn't have been empty after invoking <code>insert</code>. This is exactly the bug that we have in the code - we need to add the inserted key into the <code>keys</code> array:</p>
+<p><code>cvl
+function insert(uint key, uint value) external {
+    require(value != 0, "0 is not a valid value");
+    require (!contains(key), "key already exists");
+    map[key] = value;
+    keys.push(key);
+}
+</code></p>
+<p>Oddly enough, the rule still fails:</p>
+<p><img alt="" src="failure_2.png"/></p>
+<p>It is still reported that the length of <code>keys</code> is 0, but this is unexpected. We examine the operations performed by <code>insert</code>, and we see that it loaded a length of <code>ff....ff</code>, and then stored a length of 0. That is, our array filled-up and reached the length of max <code>uint256</code>. This may look absurd or unrealistic, but that's where the power of the Prover lies - it doesn't miss any edge case. If we believe it is unrealistic for the length of <code>keys</code> to reach the maximum value, we should:</p>
+<ul>
+<li><p>assume that the length of the array is less than max <code>uint256</code>.</p></li>
+<li><p>assert that it is indeed infeasible to directly overwrite the length slot, or to increment the length by more than <code>1</code> in each operation.</p></li>
+</ul>
+<p>We start by adding a simple assumption in the rule. (We will later replace it with an assumption of an invariant, that will also assert that reaching max <code>uint256</code> is infeasible.)</p>
+<p><code>cvl
+rule inverses(uint key, uint value) {
+    uint max_uint = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF;
+    require numOfKeys() &lt; max_uint;
+    env e;
+    insert(e, key, value);
+    env e2;
+    require e2.msg.value == 0;
+    remove@withrevert(e2, key);
+    bool removeSucceeded = !lastReverted;
+    assert removeSucceeded, "remove after insert must succeed";
+    assert get(key) != value, "value of removed key must not be the inserted value";
+}
+</code></p>
+<p>(don't forget to add <code>numOfKeys</code> to our <code>envfree</code> declarations!)</p>
+<h2>Adding iteration</h2>
+<p>Our goal in adding the <code>keys</code> variable was to allow iteration over the keys. We start with an extremely simple example, that sets all keys' values to 100:</p>
+<p>```cvl
+function iterate() external {
+    for (uint i = 0 ; i &lt; keys.length ; i++) {
+        uint key = keys[i];
+        doSomething(key, get(key));
+    }
+}</p>
+<p>function doSomething(uint key, uint value) virtual internal {
+    map[key] = 100;
+}
+```</p>
+<p>We also want to add a basic check rule:</p>
+<p><code>cvl
+rule checkIterate() {
+    env e;
+    iterate(e);
+    uint someKey;    
+    require contains(someKey);
+    assert get(someKey) == 100;
+}
+</code></p>
+<p>The rule fails with the following call trace:</p>
+<p><img alt="" src="iter_fail.png"/></p>
+<p>Let's unpack what can be seen here. First, the length of the <code>keys</code> array is 1, and we read a key <code>22f2</code>. We then write <code>100</code> to it in the map and then <code>iterate</code> function is done. We then note that <code>someKey</code>, the key we want to check for, is not <code>22f2</code>, but rather <code>20c9</code>. While we assumed that it is contained in the map by using the <code>contains</code> function, it is not contained in the <code>keys</code> array. This is expected since the Prover's starting state can be completely arbitrary, subject to constraints that we specify on it. We wish to leave the <code>contains</code> function to be an <code>O(1)</code> complexity function, and rather provide the tool with the invariants that will allow it to see only states that "make sense", or in more precise terms, we only want to see states where the <code>keys</code> array contains exactly the same elements as the non-zero valued keys in the map.</p>
+<p>In mathematical terms, the invariant that our <code>IterableMap</code> contract should satisfy is:</p>
+<p>$$∀x.(map(x)≠0⟺∃i.0≤i≤keys.length∧keys[i]=x)$$</p>
+<p>This invariant can be encoded directly in the spec file, as follows (for convenience we assume <code>keys</code> is public and has a getter):</p>
+<p><code>cvl
+invariant inMapIffInArray(uint x) 
+    get(x) != 0 &lt;=&gt; 
+        (exists uint i. 0 &lt;= i &amp;&amp; i &lt; getNumOfKeys() &amp;&amp; keys(i) == x)
+</code></p>
+<p>It is not recommended to invoke the underlying contract directly within
+quantified expressions (such as <code>exists uint i. ...</code>). The complexity of the
+underlying bytecode might lead to timeouts, and thus it is recommended to move
+to <em>ghost variables</em>. Ghost variables, once properly instrumented, allow us to
+write specs that are separated from the many technicalities of low-level
+bytecode and are thus a powerful abstraction tool.</p>
+<h2>A soft introduction to ghosts</h2>
+<p>We will write the above invariant using ghost variables exclusively (see
+{doc}<code>/docs/cvl/ghosts</code> for complete information about ghosts). First, we
+will declare ghost variables for the underlying map structure.</p>
+<p><code>cvl
+ghost mapping(uint =&gt; uint) _map;
+</code></p>
+<p>The above declaration declares a <em>ghost mapping</em>. The ghost mapping takes a
+<code>uint</code> argument (representing a key in the map) and returns a <code>uint</code> value. We
+want <code>_map</code> to return for each given key the same value as the <code>map</code> in the
+code. We can state this property as an invariant:</p>
+<p><code>cvl
+invariant checkMapGhost(uint someKey) get(someKey) == _map[someKey]
+</code></p>
+<p>Currently, the rule fails for all state-mutating functions, and even in the contract's initial state after constructor (rule <code>checkMapGhost_instate</code>):</p>
+<p><img alt="" src="ghost_fail.png"/></p>
+<p>This is unsurprising. There is nothing in the spec that links the
+value of the ghost to its Solidity counterpart. To make that link, we write
+<em>hooks</em>. Hooks allow us to instrument the verified code, that is, to wrap a
+bytecode operation with our own code, defined in the spec file.</p>
+<p>For example, we can hook on <code>SSTORE</code> operations that write to the underlying
+map as follows:</p>
+<p><code>cvl
+hook Sstore map[KEY uint k] uint v {
+    _map[k] = v;
+}
+</code></p>
+<p>This hook will match every storage write to <code>map[k]</code>, denoting the written
+value by <code>v</code>. Optionally, and not shown in the syntax above, we can also
+specify the overwritten value of <code>map[k]</code>. The body of the hook is the injected
+code. It will update the <code>_map</code> ghost.</p>
+<p>If we run <code>checkMapGhost</code> with only the <code>SSTORE</code> hook, the rule will pass for
+all functions but fail in the initial state, where no values were written. It
+is possible to specify initial state axioms on ghosts.</p>
+<p>Similarly, one could define <code>SLOAD</code> hooks:</p>
+<p><code>cvl
+hook Sload uint v map[KEY uint k] {
+    require _map[k] == v;
+}
+</code></p>
+<p>This hook says that every time the Prover encounters an <code>SLOAD</code> operation that
+reads the value <code>v</code> from <code>map[k]</code>, it will inject the code within the hook body
+after the <code>SLOAD</code>. This will make our <code>checkMapGhost</code> rule pass, but it's also
+become a tautology, because it's always true: by calling <code>get</code> we're already
+calling instrumented code that requires <code>_map[k] == v</code> whenever we load an
+arbitrary value <code>v</code> from the key <code>k</code>.</p>
+<html><head><meta content="https://github.com/Certora/Documentation/blob/master/confluence/map/iterable.md" name="url"/><meta content="No Title Found" name="title"/><meta content="The IterableMap Contract
+The IterableMap will maintain an internal array of the keys inserted to the map. In the next section, we will add an iteration function.
+```solidity
+pragma solidity ^0.7.0;
+co" name="text"/></head><body><h1>The IterableMap Contract</h1>
+<p>The <code>IterableMap</code> will maintain an internal array of the keys inserted to the map. In the next section, we will add an iteration function.</p>
+<p>```solidity
+pragma solidity ^0.7.0;</p>
+<p>contract IterableMap {
+    mapping(uint =&gt; uint) internal map;
+    function get(uint key) public view returns(uint) { return map[key]; }</p>
+<pre><code>uint[] internal keys;
+function numOfKeys() external view returns (uint) { return keys.length; }
+
+function insert(uint key, uint value) external {
+    require(value != 0, "0 is not a valid value");
+    require (!contains(key), "key already exists");
+    map[key] = value;
+}
+
+function remove(uint key) external {
+    require (map[key] != 0, "Key does not exist");
+    map[key] = 0;
+    uint i = indexOf(key);
+    if (i &lt; keys.length - 1) {
+        keys[i] = keys[keys.length-1];
+    }
+    keys.pop();
+}
+
+function contains(uint key) internal view returns (bool) {
+    if (map[key] == 0) {
+        return false;
+    }
+
+    return true;
+}
+
+function indexOf(uint key) internal view returns (uint) {
+    for (uint i = 0 ; i &lt; keys.length ; i++) {
+        if (keys[i] == key) {
+            return i;
+        }
+    }
+    require(false, "Could not find key");
+}
+</code></pre>
+<p>}
+```</p>
+<p>We can now run the original spec file on the new contract. Unfortunately, not
+all rules are passing. The <code>inverses</code> rule is failing. The assertion message
+tells us <code>Unwinding condition in a loop</code>. It is the output whenever we
+encounter a loop that cannot be finitely unrolled. To prevent missed bugs, the
+Prover outputs an assertion error in the loop's stop condition. We
+can control how many times the loops are unrolled, and in the future, the
+Prover will also support the specification of inductive invariants for full loop
+coverage. In our example, we can start by simply assuming loops can be fully
+unrolled even if only unrolled once by specifying <code>--optimistic_loop</code> in the
+command line for running the Prover.</p>
+<p>Even then <code>inverses</code> still fails. Let's consider the call trace for this rule:</p>
+<p><img alt="" src="failure_1.png"/></p>
+<p>We see that we were able to nullify the entry in the map, but the last operation that we see in the call trace under <code>remove</code> is that we load from <code>keys</code> a value of 0. It is known that the Solidity compiler associates the storage slot of an array to its length. Here we see that the read length is 0. This means the <code>key</code> array is empty. However, it shouldn't have been empty after invoking <code>insert</code>. This is exactly the bug that we have in the code - we need to add the inserted key into the <code>keys</code> array:</p>
+<p><code>cvl
+function insert(uint key, uint value) external {
+    require(value != 0, "0 is not a valid value");
+    require (!contains(key), "key already exists");
+    map[key] = value;
+    keys.push(key);
+}
+</code></p>
+<p>Oddly enough, the rule still fails:</p>
+<p><img alt="" src="failure_2.png"/></p>
+<p>It is still reported that the length of <code>keys</code> is 0, but this is unexpected. We examine the operations performed by <code>insert</code>, and we see that it loaded a length of <code>ff....ff</code>, and then stored a length of 0. That is, our array filled-up and reached the length of max <code>uint256</code>. This may look absurd or unrealistic, but that's where the power of the Prover lies - it doesn't miss any edge case. If we believe it is unrealistic for the length of <code>keys</code> to reach the maximum value, we should:</p>
+<ul>
+<li><p>assume that the length of the array is less than max <code>uint256</code>.</p></li>
+<li><p>assert that it is indeed infeasible to directly overwrite the length slot, or to increment the length by more than <code>1</code> in each operation.</p></li>
+</ul>
+<p>We start by adding a simple assumption in the rule. (We will later replace it with an assumption of an invariant, that will also assert that reaching max <code>uint256</code> is infeasible.)</p>
+<p><code>cvl
+rule inverses(uint key, uint value) {
+    uint max_uint = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF;
+    require numOfKeys() &lt; max_uint;
+    env e;
+    insert(e, key, value);
+    env e2;
+    require e2.msg.value == 0;
+    remove@withrevert(e2, key);
+    bool removeSucceeded = !lastReverted;
+    assert removeSucceeded, "remove after insert must succeed";
+    assert get(key) != value, "value of removed key must not be the inserted value";
+}
+</code></p>
+<p>(don't forget to add <code>numOfKeys</code> to our <code>envfree</code> declarations!)</p>
+<h2>Adding iteration</h2>
+<p>Our goal in adding the <code>keys</code> variable was to allow iteration over the keys. We start with an extremely simple example, that sets all keys' values to 100:</p>
+<p>```cvl
+function iterate() external {
+    for (uint i = 0 ; i &lt; keys.length ; i++) {
+        uint key = keys[i];
+        doSomething(key, get(key));
+    }
+}</p>
+<p>function doSomething(uint key, uint value) virtual internal {
+    map[key] = 100;
+}
+```</p>
+<p>We also want to add a basic check rule:</p>
+<p><code>cvl
+rule checkIterate() {
+    env e;
+    iterate(e);
+    uint someKey;    
+    require contains(someKey);
+    assert get(someKey) == 100;
+}
+</code></p>
+<p>The rule fails with the following call trace:</p>
+<p><img alt="" src="iter_fail.png"/></p>
+<p>Let's unpack what can be seen here. First, the length of the <code>keys</code> array is 1, and we read a key <code>22f2</code>. We then write <code>100</code> to it in the map and then <code>iterate</code> function is done. We then note that <code>someKey</code>, the key we want to check for, is not <code>22f2</code>, but rather <code>20c9</code>. While we assumed that it is contained in the map by using the <code>contains</code> function, it is not contained in the <code>keys</code> array. This is expected since the Prover's starting state can be completely arbitrary, subject to constraints that we specify on it. We wish to leave the <code>contains</code> function to be an <code>O(1)</code> complexity function, and rather provide the tool with the invariants that will allow it to see only states that "make sense", or in more precise terms, we only want to see states where the <code>keys</code> array contains exactly the same elements as the non-zero valued keys in the map.</p>
+<p>In mathematical terms, the invariant that our <code>IterableMap</code> contract should satisfy is:</p>
+<p>$$∀x.(map(x)≠0⟺∃i.0≤i≤keys.length∧keys[i]=x)$$</p>
+<p>This invariant can be encoded directly in the spec file, as follows (for convenience we assume <code>keys</code> is public and has a getter):</p>
+<p><code>cvl
+invariant inMapIffInArray(uint x) 
+    get(x) != 0 &lt;=&gt; 
+        (exists uint i. 0 &lt;= i &amp;&amp; i &lt; getNumOfKeys() &amp;&amp; keys(i) == x)
+</code></p>
+<p>It is not recommended to invoke the underlying contract directly within
+quantified expressions (such as <code>exists uint i. ...</code>). The complexity of the
+underlying bytecode might lead to timeouts, and thus it is recommended to move
+to <em>ghost variables</em>. Ghost variables, once properly instrumented, allow us to
+write specs that are separated from the many technicalities of low-level
+bytecode and are thus a powerful abstraction tool.</p>
+<h2>A soft introduction to ghosts</h2>
+<p>We will write the above invariant using ghost variables exclusively (see
+{doc}<code>/docs/cvl/ghosts</code> for complete information about ghosts). First, we
+will declare ghost variables for the underlying map structure.</p>
+<p><code>cvl
+ghost mapping(uint =&gt; uint) _map;
+</code></p>
+<p>The above declaration declares a <em>ghost mapping</em>. The ghost mapping takes a
+<code>uint</code> argument (representing a key in the map) and returns a <code>uint</code> value. We
+want <code>_map</code> to return for each given key the same value as the <code>map</code> in the
+code. We can state this property as an invariant:</p>
+<p><code>cvl
+invariant checkMapGhost(uint someKey) get(someKey) == _map[someKey]
+</code></p>
+<p>Currently, the rule fails for all state-mutating functions, and even in the contract's initial state after constructor (rule <code>checkMapGhost_instate</code>):</p>
+<p><img alt="" src="ghost_fail.png"/></p>
+<p>This is unsurprising. There is nothing in the spec that links the
+value of the ghost to its Solidity counterpart. To make that link, we write
+<em>hooks</em>. Hooks allow us to instrument the verified code, that is, to wrap a
+bytecode operation with our own code, defined in the spec file.</p>
+<p>For example, we can hook on <code>SSTORE</code> operations that write to the underlying
+map as follows:</p>
+<p><code>cvl
+hook Sstore map[KEY uint k] uint v {
+    _map[k] = v;
+}
+</code></p>
+<p>This hook will match every storage write to <code>map[k]</code>, denoting the written
+value by <code>v</code>. Optionally, and not shown in the syntax above, we can also
+specify the overwritten value of <code>map[k]</code>. The body of the hook is the injected
+code. It will update the <code>_map</code> ghost.</p>
+<p>If we run <code>checkMapGhost</code> with only the <code>SSTORE</code> hook, the rule will pass for
+all functions but fail in the initial state, where no values were written. It
+is possible to specify initial state axioms on ghosts.</p>
+<p>Similarly, one could define <code>SLOAD</code> hooks:</p>
+<p><code>cvl
+hook Sload uint v map[KEY uint k] {
+    require _map[k] == v;
+}
+</code></p>
+<p>This hook says that every time the Prover encounters an <code>SLOAD</code> operation that
+reads the value <code>v</code> from <code>map[k]</code>, it will inject the code within the hook body
+after the <code>SLOAD</code>. This will make our <code>checkMapGhost</code> rule pass, but it's also
+become a tautology, because it's always true: by calling <code>get</code> we're already
+calling instrumented code that requires <code>_map[k] == v</code> whenever we load an
+arbitrary value <code>v</code> from the key <code>k</code>.</p>
+</body></html>

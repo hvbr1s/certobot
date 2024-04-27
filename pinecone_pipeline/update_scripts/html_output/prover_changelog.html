@@ -1,0 +1,1066 @@
+<p>(prover-release-notes)=</p>
+<h1>Prover Release Notes</h1>
+<p><code>{contents}
+</code></p>
+<h2>7.3.0 (April 11, 2024)</h2>
+<h3>CVL</h3>
+<ul>
+<li>[feat] An option to make autofinders for internal functions less likely to cause compilation failures, <code>--use_memory_safe_autofinders</code></li>
+<li>[feat] {ref}<code>Dispatch-list summarization for calls with unresolved method identifiers &lt;catch-unresolved-calls-entry&gt;</code></li>
+<li>[feat] Preliminary support for <code>tload</code>, <code>tstore</code> operations in inline-assembly Solidity and EVM, along with <code>ALL_TLOAD</code> and <code>ALL_TSTORE</code> hooks, see {ref}<code>transient-storage</code> and {ref}<code>rawhooks</code></li>
+<li>[feat] {ref}<code>Support direct access to immutables, including private immutables &lt;direct-immutable-access&gt;</code></li>
+<li>[feat] grounding of quantifiers supported with direct storage access expressions</li>
+<li>[feat] Support asterisk (*) wildcard in <code>--rule</code>, and a new option for <code>--exclude_rule</code>, see {ref}<code>--exclude_rule</code></li>
+<li>[feat] Support using <code>requireInvariant</code> with unused invariants from imported contracts</li>
+<li>[feat] Support <code>blobhash</code> instruction and opcode hooks</li>
+<li>[bugfix] Fix <code>--address</code> setting of fixed addresses to contracts to reflect in counterexamples properly</li>
+<li>[bugfix] Fixes to internal function detection</li>
+<li>[bugfix] Fix issue when dealing with contract-types</li>
+<li>[bugfix] Support multiple havoc-assuming statements inside a rule, hook, or function</li>
+<li>[bugfix] Support unary minus in quantifier expressions</li>
+<li>[bugfix] A helper option for detecting internal functions with Yul-optimizations enabled, <code>--finder_friendly_optimizer</code></li>
+<li>[bugfix] A collection of fixes to internal function detection and summarization</li>
+<li>[bugfix] Support of summarization in old code using patterns like MakerDAO’s <code>note</code> modifier, enabled with <code>--prover_args '-rewriteMSizeAllocations true'</code> (the Global Warnings tab will advise when it’s recommended to be enabled)</li>
+</ul>
+<h3>Rule Report</h3>
+<ul>
+<li>[feat] Improved presentation of arrays and arrays’ length in the call trace</li>
+<li>[bugfix] Do not show rules as verified if the sanity check timed-out</li>
+<li>[UX] Show internal functions that could not be detected (and as a result, summarized) in the global problems view</li>
+<li>[UX] Avoid showing redundant and irrelevant analysis failures</li>
+</ul>
+<h3>Performance</h3>
+<ul>
+<li>[bugfix] Better safe math optimization for multiplication by constants</li>
+<li>[bugfix] Fixes to new parallel splitter mode</li>
+</ul>
+<h3>CLI</h3>
+<ul>
+<li>[feat] {ref}<code>--compilation_steps_only</code> option is exposed (runs only compilation and type checking)</li>
+<li>[feat] {ref}<code>--precise_bitwise_ops</code> to easily enable bit-vector theory solvers
+Mutation Testing</li>
+</ul>
+<h3>Mutation Testing</h3>
+<ul>
+<li>[feat] Allow omitting the <code>--conf</code> flag to perform collection only</li>
+<li>[bugfix] Fix root directory issue for mutated files in subdirectories</li>
+<li>[bugfix] Rules that failed sanity during the run on the original code but capture mutants will not be ignored when computing caught mutants</li>
+</ul>
+<h3>Misc.</h3>
+<ul>
+<li>[feat] Preliminary support for running the Prover on <code>.yul</code> contracts</li>
+<li>[bugfix] Assume strictly monotonic increasing free memory pointer, to avoid counterexamples due to overflow in memory access</li>
+</ul>
+<h2>7.0.7 (March 15, 2024)</h2>
+<h3>CVL</h3>
+<ul>
+<li>[feat] <code>if</code> conditions in CVL must be wrapped with parenthesis. Namely, <code>if cond</code> is illegal, use <code>if (cond)</code></li>
+<li>[feat] It is no longer needed to specify the <code>STORAGE</code> keyword for <code>Sload</code> and <code>Sstore</code> hooks. Please find-replace in your current specs!</li>
+<li>[feat] The default summarization policy for wildcard external functions (e.g. <code>_.foo(..) =&gt;</code>) is <code>UNRESOLVED</code>, meaning that the summary will only apply to calls to <code>foo</code> whose target contract is unknown. If you wish to apply to all call sites of <code>foo</code>, including for properly linked contracts, write <code>_.foo(..) =&gt; some_summary ALL;</code></li>
+<li>[feat] Allow 'tuple like' syntax for assignments, e.g. <code>(x,y) = foo();</code></li>
+<li>[feat] Support <code>blobbasefee</code> variable in environment variables</li>
+<li>[feat] {ref}<code>Auto-summarization mode for heuristically expensive internal functions &lt;detect-candidates-for-summarization&gt;</code></li>
+<li>[feat] Support hooking on length of dynamic storage arrays</li>
+<li>[feat] {ref}<code>Support basic struct comparison &lt;struct-comparison&gt;</code></li>
+<li>[bugfix] Wildcards properly constrained when assigned e.g. in summarization</li>
+<li>[bugfix] Ensure cleanliness of CVL strings in the last word</li>
+<li>[bugfix] Unlinked immutables are properly constrained to respect their types</li>
+<li>[bugfix] Correct invariant handling of the base case rule for Vyper contracts</li>
+<li>[bugfix] Fix to <code>viewReentrancy</code> builtin rule crash</li>
+<li>[bugfix] Better type checking of quantified expressions with definitions</li>
+<li>[bugfix] Fix direct storage access to an array of structs</li>
+<li>[bugfix] Fix for internal summaries using user-defined value types</li>
+</ul>
+<h3>Rule Report</h3>
+<ul>
+<li>[feat] Display array length in variables tab</li>
+<li>[feat] Display array length in CVL to CVL function calls</li>
+<li>[bugfix] No false match on Vyper constructors in invariants and parametric rules</li>
+<li>[bugfix] Consistent rule ordering</li>
+<li>[bugfix] Show message in report when <code>--prover_args</code> are incorrect</li>
+</ul>
+<h3>Static analysis and Performance</h3>
+<ul>
+<li>[feat] Automatic full unrolling of copy loops (no need to set <code>-copyLoopUnroll</code> option)</li>
+<li>[bugfix] Proper deduplication of libraries imported by different scene-level contracts</li>
+<li>[bugfix] Fix returns of static arrays</li>
+<li>[bugfix] make hashing of <code>encodePacked</code> <code>bytes</code> result deterministic when <code>-enableCopyLoopRewrites</code> is set to true</li>
+<li>[bugfix] Source-based call resolution is disabled by default except for constructor methods. Can be re-enabled with <code>--prover_args '-enableSolidityBasedInlining true'</code></li>
+</ul>
+<h3>Mutation Testing</h3>
+<ul>
+<li>[feat] Instead of running with 2 <code>conf</code> files, one for the Prover and one for mutation, now the mutation settings are stored in the Prover <code>conf</code> under the key mutations</li>
+<li>[feat] Relative paths to files to mutate are not relative to the mutation conf, but relative to current working directory</li>
+<li>[feat] Nicer help message for <code>certoraMutate</code></li>
+<li>[bugfix] Minor mutation testing <code>csv</code> output</li>
+<li>[bugfix] Default to optimistically running all mutants, not waiting for the original run</li>
+<li>[bugfix] Improved error messages for manual mutations</li>
+</ul>
+<h3>CLI</h3>
+<ul>
+<li>[feat] Instead of <code>--prover_args '-optimisticFallback true'</code> use <code>--optimistic_fallback</code></li>
+<li>[feat] Instead of <code>--prover_args '-contractRecursionLimit N'</code> use <code>--contract_recursion_limit N</code>, and a new flag <code>--optimistic_contract_recursion</code></li>
+<li>[feat] New option <code>--compiler_map</code> behaving exactly like <code>--solc_map</code></li>
+<li>[bugfix] Fix to <code>--address</code> when given without <code>0x</code> prefix</li>
+</ul>
+<h2>6.3.1 (February 2, 2024)</h2>
+<h3>CVL</h3>
+<ul>
+<li>[feat] {ref}<code>address-casting</code></li>
+<li>[feat] {ref}<code>ecrecover</code> builtin support</li>
+<li>[feat] Optimistically assume the <code>extcodesize</code> is positive for calls that are summarized and with a non-<code>HAVOC</code> summary. This behavior can be disabled with <code>--prover_args 'optimisticExtcodesize false'</code></li>
+<li>[feat] Support direct storage access in quantifiers and axioms</li>
+<li>[bugfix] Implication, bi-implication and ternary conditional operators are right-associative</li>
+<li>[bugfix] {ref}<code>Fully support additional environment fields &lt;env&gt;</code>. Namely, for <code>env e</code>, one can access <code>e.block.basefee</code>, <code>e.block.coinbase</code>, <code>e.block.difficulty</code>, <code>e.block.gaslimit</code> and <code>e.tx.origin</code></li>
+<li>[bugfix] Properly enforce bounds on enums accessed using direct storage access</li>
+<li>[bugfix] Fix a bug with structs being passed to summaries and not preserving their fields’ values</li>
+<li>[bugfix] Avoid hook inlining due to direct storage access</li>
+<li>[bugfix] Type checker will error in presence of non-boolean expressions in quantifiers' bodies</li>
+<li>[UX] Emit a global error in rule report if 0 rules are provided in the spec</li>
+<li>[UX] Cast assertions in CVL are treated like regular user-provided assertions</li>
+<li>[UX] Warn about, and ignore, unused <code>method</code> arguments</li>
+<li>[UX] Prevent calling library functions from CVL</li>
+</ul>
+<h3>Call Trace and Rule Report</h3>
+<ul>
+<li>[feat] Add presentation of direct storage reads and direct storage havocs, including showing the updates in the Storage State</li>
+<li>[feat] When the user provided no assertion message, show the assert condition</li>
+<li>[bugfix] More refined handling of branch snippets within loop iterations</li>
+<li>[bugfix] Ensure we get the correct TAC dump link</li>
+<li>[UX] Improved messages for assertions in builtin rules</li>
+<li>[UX] New presentation for invariants</li>
+<li>[UX] Branch snippets are now flattened, can be made hierarchical using <code>--prover_args '-flattenBranchesInCallTrace false'</code></li>
+</ul>
+<h3>Static analysis and Performance</h3>
+<ul>
+<li>[feat] <code>abi.encodeCall</code> calls will be considered as copy-loops, thus will not require a higher <code>--loop_iter</code> if we enable the following option: <code>--prover_args '-enableCopyLoopRewrites true'</code></li>
+<li>[feat] Better performance on last assertions in a rule if <code>--prover_args '-calltraceFreeOpt true'</code> is enabled</li>
+</ul>
+<h3>Misc</h3>
+<ul>
+<li>[feat] Support Vyper v0.3.10</li>
+<li>[bugfix] Various bug fixes to improve stability of the Prover (crashes, static analysis, and SMT solving)</li>
+<li>[bugfix] Better support of importing user-defined types from Solidity imports even if they are not given in a consistent fashion by <code>solc</code></li>
+</ul>
+<h2>6.1.3 (January 11, 2024)</h2>
+<h3>CVL</h3>
+<ul>
+<li>[feat] Rules can now use both <code>satisfy</code> and <code>assert</code> statements together</li>
+<li>[feat] An option for checking <code>satisfy</code> statements one-by-one instead of depending on previous <code>satisfy</code>-s, enabled with <code>--independent_satisfy</code></li>
+<li>[feat] {ref}<code>persistent-ghosts</code></li>
+<li>[feat] support <code>selector</code> keyword in <code>CALL</code>-like hooks that can be compared to function selectors</li>
+<li>[feat] New builtin function for hashing <code>keccak256</code> in CVL</li>
+<li>[feat] Support method parameter filters when invariants are imported with <code>use</code></li>
+<li>[feat] New options {ref}<code>--optimistic_summary_recursion</code> and {ref}<code>--summary_recursion_limit</code>.</li>
+<li>[bugfix] improved error messages for hooks</li>
+<li>[bugfix] Fix compile time checks for ghosts mappings axioms and bad CVL function calls therein</li>
+<li>[bugfix] Make <code>CONSTANT</code> summaries of internal functions consistent</li>
+<li>[bugfix] Allow Solidity struct fields named hook</li>
+<li>[bugfix] Fix <code>to_bytes</code> in quantifiers</li>
+<li>[bugfix] Better error message on struct decode failures</li>
+<li>[bugfix] Proper typing of sub-expressions of bitwise shift operations within quantifiers</li>
+<li>[UX] Nicer error messages for invalid use of <code>max_*</code> constants and hex literals</li>
+<li>[UX] Sanity builtin rule now succeeds when the sanity check succeeds (using <code>satisfy</code> under the hood) (note this can swap the expected result if you use the builtin sanity rule often, but you no longer have to interpret a “violated” result as the good one)</li>
+</ul>
+<h3>Performance</h3>
+<ul>
+<li>[feat] New optimization analysis. It can be configured to be more or less aggressive with the option <code>--prover_args '-intervals_rewriter INT'</code></li>
+<li>[feat] New flag for better performance: <code>--prover_args '-enableCopyLoopRewrites true'</code>  - replaces copy loop code blocks with a single copy command. Decreases problem size and obviates loop unrolling for copy loops (i.e., more sound)</li>
+<li>[feat] New flag for better performance: <code>--prover_args '-enableAggressivePartitionPruning true'</code> - for Solidity code that often manipulates - dynamic objects in memory</li>
+</ul>
+<h3>Call Trace</h3>
+<ul>
+<li>[feat] Show branch source information (can be disabled with <code>--prover_args '-enableConditionalSnippets false'</code>)</li>
+<li>[bugfix] Fix return value display for ghost reads</li>
+</ul>
+<h3>Mutation Testing</h3>
+<ul>
+<li>[feat] Generate mutation configuration automatically</li>
+<li>[UX] Expose errors emitted by Gambit</li>
+<li>[UX] <code>certoraMutate</code> now uses <code>.mconf</code> files instead of <code>.conf</code></li>
+</ul>
+<h3>Misc</h3>
+<ul>
+<li>[feat] enable the max constant loop unroll factor inferred with <code>--prover_args '-loopUnrollBoundGuessUpperLimit INT</code></li>
+<li>[bugfix] Vyper fixes for static arrays, xor patterns, <code>ABI</code> fetching in old versions</li>
+<li>[bugfix] Support for some older versions of Vyper (0.3.7 and earlier)</li>
+<li>[bugfix] Better decompilation for try/catch in a loop</li>
+<li>[bugfix] Fix to false negative tautology check</li>
+<li>[bugfix] Better retry mechanism for job-submission by <code>certora-cli</code></li>
+<li>[bugfix] Align with EVM by setting <code>x/0 = 0</code></li>
+<li>[bugfix] Fix storage analysis when Solidity optimizer is enabled</li>
+<li>[bugfix] Fixes in handling <code>solc</code>'s <code>--via-ir</code> optimizer mode</li>
+<li>[UX] Fix wait time in CLI to 2:30 hours, to account for possible long queue times in CI runs</li>
+</ul>
+<h2>5.0.5 (November 21, 2023)</h2>
+<p>Please find a list of the main changes in v5 here {doc}<code>/docs/cvl/v5-changes</code>.</p>
+<h3>CVL</h3>
+<ul>
+<li>[feat] Allowing calling Solidity functions from within CVL hooks</li>
+<li>[feat] {ref}<code>direct-storage-access</code></li>
+<li>[feat] Support for exhaustive parametric methods. Now <code>method f</code> calls will check for all methods in all contracts in Scene. The set of checked contracts can be limited with <code>--parametric_contracts Contract1 Contract2</code></li>
+<li>[bugfix] Disallow declaring method variables (aka <code>method f</code>; declarations) outside the top-level scope of a rule. They could still be declared as rule and CVL function arguments</li>
+<li>[bugfix] Remove assume/assert notation from <code>DELETE</code> summary qualifiers</li>
+<li>[bugfix] Disallow Solidity calls in CVL quantifier bodies</li>
+<li>[bugfix] Support the '$' sign in identifiers (specifically for Solidity functions)</li>
+<li>[UX] When non-reverting calls lead to an 'empty function' because all paths revert, show an alert in the rule report</li>
+</ul>
+<h3>Performance</h3>
+<ul>
+<li>[feat] New parallel splitter, can be enabled with <code>--prover_args '-newSplitParallel true'</code></li>
+<li>[feat] A new option for potential help with timeouts <code>--prover_args '-calltraceFreeOpt true'</code></li>
+<li>[feat] An option <code>-relaxedPointerSemantics</code> accepting a comma-separated list of <code>contract:methodWithoutParamTypes</code> pairs where the points-to analysis is allowed to be less strict</li>
+<li>[feat] Better support for internal function summaries when <code>--via-ir</code> option is used, enabled with <code>--function_finder_mode relaxed</code></li>
+<li>[bugfix] Errors for an optimization we call “Memory partitioning” will now show up as alerts in the Global Problems view</li>
+</ul>
+<h3>Misc</h3>
+<ul>
+<li>[feat] Solana call trace basic support</li>
+<li>[feat] Mutation testing: Allow <code>certoraMutate</code> to run with a link to an original run</li>
+<li>[feat] Allow to skip <code>solc</code> warnings we consider errors (undefined return values) with <code>--contract_compiler_skip_severe_warning_as_error</code></li>
+<li>[feat] <code>--send_only</code> is now the default mode except for CI users. Use <code>--wait_for_results</code> to force the old behavior</li>
+<li>[bugfix] Fixes for: Vyper, loop unrolling, CVL, memory consumption, storage splitting</li>
+<li>[bugfix] Remove support for native array theory in SMT</li>
+<li>[bugfix] Mutation testing: only delete files created by the mutation tester</li>
+<li>[UX] Old CLI format is now obsolete</li>
+<li>[UX] CVL1 type checker is not run anymore for compatibility checks</li>
+<li>[UX] <code>--solc_args</code> is deprecated</li>
+</ul>
+<h2>4.13.1 (September 26, 2023)</h2>
+<p>Minor improvements.</p>
+<ul>
+<li>[feat] Present array length accesses in call  trace</li>
+<li>[bugfix] Report timeouts of sanity checks</li>
+</ul>
+<h2>4.12.1 (September 17, 2023)</h2>
+<h3>CVL</h3>
+<ul>
+<li>[bugfix] fix to bitwise operations</li>
+<li>[bugfix] verify range of <code>nativeBalances[addr]</code> values</li>
+<li>[bugfix] no duplication of multi-dimensional ghosts with axioms</li>
+<li>[feat] delete summary qualifiers for faster preprocessing and dealing with analysis-breaking external functions. If a function is never called from spec, it will not be processed. In cases where it is externally called from Solidity, the summary will apply.</li>
+<li>[feat] greater flexibility of internal summaries - allows accepting as arguments and returning certain reference types: primitive arrays, <code>bytes</code>, and structs which may (in nested structs too) contain primitive arrays</li>
+<li>[feat] support multiple return values from CVL functions</li>
+<li>[bugfix] Support keywords as struct fields and user defined type names</li>
+<li>[bugfix] Fix to multi-assert mode when multiple CVL asserts in a rule share the same message</li>
+<li>[UX] Skip rules where all methods are filtered out</li>
+<li>[bugfix] Do not drop quantifiers when instrumenting vacuity checks</li>
+<li>[UX] Improved error messages for preserved block errors</li>
+<li>[bugfix] Support invariant preserved blocks for functions with an argument which is an array of structs</li>
+<li>[feat] New keyword: <code>executingContract</code> available inside opcode hooks</li>
+<li>[bugfix] Applying the CALL opcode hook even if the balance transfer fails</li>
+<li>[bugfix] Support assigning to a wildcard variable</li>
+<li>[bugfix] Fail if CVL function is non-void and does not end with a return statement</li>
+</ul>
+<h3>Performance</h3>
+<ul>
+<li>[feat] Optimizations for safe math handling, in particular for <code>solc</code> versions 8.19 and up</li>
+<li>[feat] Better performance of <code>string</code> and array types</li>
+</ul>
+<h3>Call Trace &amp; Rule Report</h3>
+<ul>
+<li>[feat] Show storage changed since the start</li>
+<li>[feat] More frequent rule-report update</li>
+<li>[bugfix] Rule running time to show time interval instead of sum of sub-rules intervals</li>
+<li>[feat] Show state of ghosts together with contract state</li>
+<li>[bugfix] Fix formatting of values of type <code>bytesN</code> and of storage locations</li>
+</ul>
+<h3>CLI</h3>
+<ul>
+<li>[bugfix] link to CVL2 migration document fixed</li>
+<li>[bugfix] support for other formats of protocol author in <code>package.json</code> files</li>
+<li>[bugfix] fix error message when passing global timeout setting</li>
+<li>[bugfix] less verbose prints in terminal</li>
+<li>[UX] Validate rule names</li>
+<li>[UX] Show number of splits solved per rule and their "weight"</li>
+<li>[bugfix] Fixes to equivalence checker</li>
+</ul>
+<h3>Mutation Verification</h3>
+<ul>
+<li>[bugfix] correct traversing of rules</li>
+<li>[feat] improved csv output</li>
+</ul>
+<h3>Equivalence Checker</h3>
+<ul>
+<li>[feat] Support void functions</li>
+<li>[feat] Support compiler comparison</li>
+<li>[bugfix] Making comparison more reliable in terms of initial state and with respect to low-level calls</li>
+</ul>
+<h2>4.10.1 (August 21, 2023)</h2>
+<h3>CVL</h3>
+<ul>
+<li>[feat] Support Solidity calls also from internal summaries</li>
+<li>[feat] Allowing <code>with(env)</code> for summaries {ref}<code>with-env</code></li>
+<li>[bugfix] <code>lastStorage</code> comparison fix for ghost maps</li>
+<li>[bugfix] Bitwidth for <code>bytesK</code> variables is ensured, important for revert characteristic rules for methods accepting <code>bytesK</code></li>
+<li>[bugfix] Fixing <code>struct</code>s encoding</li>
+<li>[bugfix] Matching method summaries for methods accepting <code>interface</code>s</li>
+<li>[bugfix] Some improvements to how quantifiers calling Solidity functions are handled</li>
+</ul>
+<h3>Mutation Verification</h3>
+<ul>
+<li>[feat] Output CSV files of the results</li>
+<li>[bugfix] Manual mutations work and support for multiple manual mutations</li>
+<li>[bugfix] <code>certoraMutate</code> working when running from project’s root</li>
+</ul>
+<h3>Timeouts and performance</h3>
+<ul>
+<li>[feat] Show informative messages about cache hits</li>
+<li>[bugfix] fix hashes of constant strings in constructors vs. in executable bytecode</li>
+</ul>
+<h3>Linking</h3>
+<ul>
+<li>[bugfix] Fixing source-based heuristics linking to decrease chance for wrong matches</li>
+<li>[bugfix] Fixes to sighash resolution</li>
+<li>[bugfix] Correct revert handling in dispatched calls</li>
+</ul>
+<h3>Vyper</h3>
+<ul>
+<li>[bugfix] Support for versions below 0.2.16 (from before storage layout output was introduced in Vyper)</li>
+</ul>
+<h2>4.8.0 (August 13, 2023)</h2>
+<h3>New features and enhancements</h3>
+<h4>CVL</h4>
+<ul>
+<li>Better expressivity: <code>ALWAYS</code> summaries can get <code>bytesK</code> arguments, e.g. <code>... =&gt; ALWAYS(to_bytesK(...))</code></li>
+<li>Support for <code>ALL_SLOAD</code> and <code>ALL_SSTORE</code> hooks (see {ref}<code>rawhooks</code>)</li>
+<li>Improved ABI encoding/decoding in CVL</li>
+<li>More efficient handling of skipped rules</li>
+<li>Allow calling Solidity functions from expression summaries</li>
+</ul>
+<h4>Call Trace and Rule Report</h4>
+<ul>
+<li>Display havoced return values</li>
+<li>Fixes to dump generation</li>
+<li>Improved timeout visualization in TAC dumps</li>
+<li>Fixes to presentation of quantified formulas in Call Trace</li>
+<li>Better presentation of timeouts</li>
+<li>Rule report will contain warnings about unused summaries</li>
+<li>Display native balances</li>
+<li>More friendly text for dispatcher-based resolutions</li>
+<li>Improved ghost presentation</li>
+</ul>
+<h4>Performance</h4>
+<ul>
+<li>Rule cache is enabled</li>
+<li>Reducing number of iterations of static analyses</li>
+<li>Improved decompiler performance</li>
+</ul>
+<h4>Mutation Verifier</h4>
+<ul>
+<li>Manual mutants now supported in <code>certoraMutate</code></li>
+</ul>
+<h4>Equivalence Checker</h4>
+<ul>
+<li>Support for Vyper for the equivalence checker (<code>certoraEqCheck</code> utility)</li>
+</ul>
+<h4>CLI</h4>
+<ul>
+<li>Allowing more Solidity file names</li>
+<li>More compact zip input to cloud</li>
+<li>Users can reduce the global timeout below 2 hours using {ref}<code>--global_timeout</code></li>
+</ul>
+<h3>Bug fixes</h3>
+<h4>CVL</h4>
+<ul>
+<li>More graceful handling of bit-vector mode so that it emits less errors. It should be noted that numbers are forced to the 256-bit range and thus it is not recommended to use bit-vector mode. </li>
+<li>Declaration of wildcard (i.e. <code>_</code>) variable names in rules or rule arguments is disallowed</li>
+<li>Internal summaries - disallow <code>NONDET</code> summary on functions returning a pointer, as well as <code>HAVOC</code> or <code>HAVOC_ECF</code> summaries</li>
+<li>Better checks on ghost axioms, especially if they refer to definitions</li>
+<li>Fixing array literal assignments</li>
+<li>Forbid assignments to array elements, i.e. <code>uint[] a; a[0] = x;</code> is disallowed</li>
+<li>Internal summarization did not work in certain tricky cases involving loops and external calls</li>
+<li>Fixing "Certora Prover Internal Error" sometimes appearing when reasoning on complex-typed arrays</li>
+<li>Fixes for structs with contract types as fields</li>
+</ul>
+<h4>Call Trace</h4>
+<ul>
+<li>Fix call trace generation issues for <code>forall</code> expressions</li>
+</ul>
+<h4>Mutation Verifier</h4>
+<ul>
+<li>Correctly dealing with original runs where rules were originally violated</li>
+</ul>
+<h4>Misc.</h4>
+<ul>
+<li>Static analyses bug fixes</li>
+<li>Fixes to read-only reentrancy rule</li>
+<li>Avoiding an exception when <code>-dontStopAtFirstSplitTimeout</code> completes with all splits timing out</li>
+</ul>
+<h3>Other improvements</h3>
+<ul>
+<li>Better parallelism and utilization</li>
+<li>Timeout cores and more difficulty traces and hints to study timeout causes</li>
+<li>Support for Solidity compiler version 0.8.20 and up</li>
+</ul>
+<h2>4.5.1 (July 15, 2023)</h2>
+<h3>New features</h3>
+<h4>CVL</h4>
+<ul>
+<li>Better expressivity: Allow binding the called contract in summaries using <code>calledContract</code> (see {ref}<code>function-summary</code>)</li>
+<li>Ease of use: Support reading and passing complex array and struct types in CVL. For example, you can write now:
+<code>cvl
+env e;
+uint v;
+Test.MyComplexStruct x;
+uint[] thingArray = x.nested[v].thing;
+require thingArray.length == 3;
+assert foo(e, x, v) == 3;
+</code></li>
+</ul>
+<p>For the Solidity snippet of a contract <code>Test</code>:
+```solidity
+struct MyComplexStruct {
+    MyInnerStruct[] nested;
+}</p>
+<p>struct MyInnerStruct {
+    uint[] thing;
+    uint field;
+}</p>
+<p>function foo(MyComplexStruct memory z, uint x) external returns (uint) {
+    return z.nested[x].thing.length;
+}
+```</p>
+<ul>
+<li><p>Ease of use: Support access for storage variables whose type is either a primitive, a user defined value, or an enum</p></li>
+<li><p>Ease of use: Enum types can be cast to integer types in CVL using the usual <code>assert_TYPE</code> and <code>require_TYPE</code> operators (see {ref}<code>cvl2-integer-types</code>)</p></li>
+<li><p>A built-in rule for read-only reentrancy vulnerabilities</p></li>
+</ul>
+<h4>Call Trace</h4>
+<ul>
+<li>Better view of the storage state at storage assignments, storage restore points, and storage comparisons</li>
+</ul>
+<h4>Multi-contract handling</h4>
+<ul>
+<li><p>Improvements to the call resolution fallback mechanism in case main analyses fail, allowing linking and summarizations despite the failures</p></li>
+<li><p>Introducing <code>summarizeExtLibraryCallsAsNonDetPreLinking</code> Prover option for easier setup of library-heavy code. See {ref}<code>library_timeouts</code></p></li>
+</ul>
+<h4>Mutation Verifier</h4>
+<ul>
+<li>New and easier to use <code>certoraMutate</code>. See {doc}<code>/docs/gambit/mutation-verifier</code></li>
+</ul>
+<h3>Bug fixes</h3>
+<h4>CVL</h4>
+<ul>
+<li>Fix issue when CVL functions are invoked within ternary expressions</li>
+<li>Fix evaluation of power expressions such as 2^256</li>
+<li>Make sure CVL keywords can appear as struct fields and be accessible from CVL</li>
+</ul>
+<h4>Performance</h4>
+<ul>
+<li>Performance optimizations for the contract preprocessing step</li>
+<li>Performance improvements in Prover</li>
+<li>Performance improvements in CVL type checker (allows for faster job submission)</li>
+</ul>
+<h4>UX</h4>
+<ul>
+<li>Show primary contract under verification even when a job is queued but not yet started</li>
+<li>{ref}<code>envfree &lt;envfree&gt;</code> checks failures presented not just in rules section, but also in the problems view for highlighting</li>
+<li>Make sure more files generated by <code>certoraRun</code> are stored in <code>.certora_internal</code></li>
+<li>Allow equivalence checker to have the same function name appear in two contracts</li>
+</ul>
+<h2>4.3.1 (July 2, 2023)</h2>
+<h3>New features</h3>
+<h4>CVL</h4>
+<ul>
+<li>New builtin rules: {ref}<code>sanity &lt;built-in-sanity&gt;</code> and {ref}<code>deepSanity &lt;built-in-deep-sanity&gt;</code></li>
+<li>Support a new keyword in CVL: {ref}<code>satisfy &lt;satisfy&gt;</code></li>
+<li>User-defined types can appear in hook patterns</li>
+<li>Support using <code>currentContract</code> in ghosts and quantified expressions</li>
+<li>Support conversion of <code>uintN</code> to <code>bytesK</code> with casting {ref}<code>bytesN-support</code></li>
+<li>Support {ref}<code>nativeBalances &lt;special-fields&gt;</code> in CVL</li>
+<li>Making access of user-defined-types (enums, structs, user-defined type values) in Solidity consistent, whether those types are declared in a contract or outside of a contract. Specifically, for a user-defined type that's declared in a contract, the access to it in a spec file is <code>DeclaringContract.TypeName</code>. For top-level user-defined types (declared outside of any contract/library) the access is using the using contract <code>UsingContract.TypeName</code>.</li>
+<li>Support for {ref}<code>EVM opcode hooks &lt;opcode-hooks&gt;</code></li>
+</ul>
+<h4>CallTrace</h4>
+<ul>
+<li>Display CVL functions in Call Trace</li>
+<li>CallTrace presenting skolemized variables for quantified expressions</li>
+<li>Gather all setup labels in CallTrace to be under one label</li>
+<li>Make CallTrace accept invocation of internal solidity functions from CVL</li>
+</ul>
+<h4>Summarization</h4>
+<ul>
+<li>Early summarization of internal functions for improved performance and precision</li>
+<li>{ref}<code>“catch-all” summaries &lt;library_timeouts&gt;</code>. For example, given a library <code>L</code> on which we wish to apply the same summary for all external methods in <code>L</code>, write <code>function L._ external =&gt; NONDET</code></li>
+</ul>
+<h4>Performance</h4>
+<ul>
+<li>More stable generation of formulas for more predictable, consistent running times of rules</li>
+<li>Basic parallel splitting for improved running time of rule solving</li>
+</ul>
+<h4>Other improvements</h4>
+<ul>
+<li>Change default to new <code>certora-cli</code> API</li>
+<li>Check for an invalid rule name (given with <code>--rule</code>) locally, before sending a request to the server</li>
+<li>Adapt CVL AST serialization to JSON to enable LSP for CVL2</li>
+<li>Visualize unsolved splits in timeouts</li>
+</ul>
+<h3>Bug fixes</h3>
+<ul>
+<li>Warn if <code>CONST</code> summary is applied to methods that return nothing</li>
+<li>The type checker will fail if an internal method summary uses an inheriting contract name instead of the declaring contract name</li>
+<li>Disallow shadowing of ghost variables</li>
+<li>Support exists as a struct field in spec files</li>
+<li><code>require_</code> and <code>assert_</code> casts disallowed in ghost axioms</li>
+<li>CallTrace bug fixes</li>
+</ul>
+<h2>4.0.5 (June 7, 2023) CVL 2</h2>
+<h3>Breaking changes</h3>
+<ul>
+<li>Upgrade to CVL 2 (see {doc}<code>/docs/cvl/cvl2/changes</code> and {doc}<code>/docs/cvl/cvl2/migration</code>) </li>
+<li>Change the minimal python required version from 3.8.0 to 3.8.16</li>
+</ul>
+<h3>New features</h3>
+<ul>
+<li>{ref}<code>storage-comparison</code></li>
+<li>Add support for Vyper</li>
+<li>Support <code>CONSTANT</code> summaries for all non-dynamic return types</li>
+<li>New {ref}<code>built-in rules &lt;built-in&gt;</code> <code>sanity</code> and <code>deepSanity</code></li>
+<li>Added <code>--protocol_name</code> and <code>--protocol_owner</code> flags</li>
+</ul>
+<h3>Other improvements</h3>
+<ul>
+<li>Performance improvements</li>
+<li>Bug fixes and internal improvements</li>
+<li>Improved error messages</li>
+<li>Improved console output</li>
+<li>Improved call resolution output</li>
+</ul>
+<html><head><meta content="https://github.com/Certora/Documentation/blob/master/prover/changelog/prover_changelog.md" name="url"/><meta content="No Title Found" name="title"/><meta content="(prover-release-notes)=
+Prover Release Notes
+{contents}
+
+7.3.0 (April 11, 2024)
+CVL
+
+[feat] An option to make autofinders for internal functions less likely to cause compilation failures, --use_memory" name="text"/></head><body><p>(prover-release-notes)=</p>
+<h1>Prover Release Notes</h1>
+<p><code>{contents}
+</code></p>
+<h2>7.3.0 (April 11, 2024)</h2>
+<h3>CVL</h3>
+<ul>
+<li>[feat] An option to make autofinders for internal functions less likely to cause compilation failures, <code>--use_memory_safe_autofinders</code></li>
+<li>[feat] {ref}<code>Dispatch-list summarization for calls with unresolved method identifiers &lt;catch-unresolved-calls-entry&gt;</code></li>
+<li>[feat] Preliminary support for <code>tload</code>, <code>tstore</code> operations in inline-assembly Solidity and EVM, along with <code>ALL_TLOAD</code> and <code>ALL_TSTORE</code> hooks, see {ref}<code>transient-storage</code> and {ref}<code>rawhooks</code></li>
+<li>[feat] {ref}<code>Support direct access to immutables, including private immutables &lt;direct-immutable-access&gt;</code></li>
+<li>[feat] grounding of quantifiers supported with direct storage access expressions</li>
+<li>[feat] Support asterisk (*) wildcard in <code>--rule</code>, and a new option for <code>--exclude_rule</code>, see {ref}<code>--exclude_rule</code></li>
+<li>[feat] Support using <code>requireInvariant</code> with unused invariants from imported contracts</li>
+<li>[feat] Support <code>blobhash</code> instruction and opcode hooks</li>
+<li>[bugfix] Fix <code>--address</code> setting of fixed addresses to contracts to reflect in counterexamples properly</li>
+<li>[bugfix] Fixes to internal function detection</li>
+<li>[bugfix] Fix issue when dealing with contract-types</li>
+<li>[bugfix] Support multiple havoc-assuming statements inside a rule, hook, or function</li>
+<li>[bugfix] Support unary minus in quantifier expressions</li>
+<li>[bugfix] A helper option for detecting internal functions with Yul-optimizations enabled, <code>--finder_friendly_optimizer</code></li>
+<li>[bugfix] A collection of fixes to internal function detection and summarization</li>
+<li>[bugfix] Support of summarization in old code using patterns like MakerDAO’s <code>note</code> modifier, enabled with <code>--prover_args '-rewriteMSizeAllocations true'</code> (the Global Warnings tab will advise when it’s recommended to be enabled)</li>
+</ul>
+<h3>Rule Report</h3>
+<ul>
+<li>[feat] Improved presentation of arrays and arrays’ length in the call trace</li>
+<li>[bugfix] Do not show rules as verified if the sanity check timed-out</li>
+<li>[UX] Show internal functions that could not be detected (and as a result, summarized) in the global problems view</li>
+<li>[UX] Avoid showing redundant and irrelevant analysis failures</li>
+</ul>
+<h3>Performance</h3>
+<ul>
+<li>[bugfix] Better safe math optimization for multiplication by constants</li>
+<li>[bugfix] Fixes to new parallel splitter mode</li>
+</ul>
+<h3>CLI</h3>
+<ul>
+<li>[feat] {ref}<code>--compilation_steps_only</code> option is exposed (runs only compilation and type checking)</li>
+<li>[feat] {ref}<code>--precise_bitwise_ops</code> to easily enable bit-vector theory solvers
+Mutation Testing</li>
+</ul>
+<h3>Mutation Testing</h3>
+<ul>
+<li>[feat] Allow omitting the <code>--conf</code> flag to perform collection only</li>
+<li>[bugfix] Fix root directory issue for mutated files in subdirectories</li>
+<li>[bugfix] Rules that failed sanity during the run on the original code but capture mutants will not be ignored when computing caught mutants</li>
+</ul>
+<h3>Misc.</h3>
+<ul>
+<li>[feat] Preliminary support for running the Prover on <code>.yul</code> contracts</li>
+<li>[bugfix] Assume strictly monotonic increasing free memory pointer, to avoid counterexamples due to overflow in memory access</li>
+</ul>
+<h2>7.0.7 (March 15, 2024)</h2>
+<h3>CVL</h3>
+<ul>
+<li>[feat] <code>if</code> conditions in CVL must be wrapped with parenthesis. Namely, <code>if cond</code> is illegal, use <code>if (cond)</code></li>
+<li>[feat] It is no longer needed to specify the <code>STORAGE</code> keyword for <code>Sload</code> and <code>Sstore</code> hooks. Please find-replace in your current specs!</li>
+<li>[feat] The default summarization policy for wildcard external functions (e.g. <code>_.foo(..) =&gt;</code>) is <code>UNRESOLVED</code>, meaning that the summary will only apply to calls to <code>foo</code> whose target contract is unknown. If you wish to apply to all call sites of <code>foo</code>, including for properly linked contracts, write <code>_.foo(..) =&gt; some_summary ALL;</code></li>
+<li>[feat] Allow 'tuple like' syntax for assignments, e.g. <code>(x,y) = foo();</code></li>
+<li>[feat] Support <code>blobbasefee</code> variable in environment variables</li>
+<li>[feat] {ref}<code>Auto-summarization mode for heuristically expensive internal functions &lt;detect-candidates-for-summarization&gt;</code></li>
+<li>[feat] Support hooking on length of dynamic storage arrays</li>
+<li>[feat] {ref}<code>Support basic struct comparison &lt;struct-comparison&gt;</code></li>
+<li>[bugfix] Wildcards properly constrained when assigned e.g. in summarization</li>
+<li>[bugfix] Ensure cleanliness of CVL strings in the last word</li>
+<li>[bugfix] Unlinked immutables are properly constrained to respect their types</li>
+<li>[bugfix] Correct invariant handling of the base case rule for Vyper contracts</li>
+<li>[bugfix] Fix to <code>viewReentrancy</code> builtin rule crash</li>
+<li>[bugfix] Better type checking of quantified expressions with definitions</li>
+<li>[bugfix] Fix direct storage access to an array of structs</li>
+<li>[bugfix] Fix for internal summaries using user-defined value types</li>
+</ul>
+<h3>Rule Report</h3>
+<ul>
+<li>[feat] Display array length in variables tab</li>
+<li>[feat] Display array length in CVL to CVL function calls</li>
+<li>[bugfix] No false match on Vyper constructors in invariants and parametric rules</li>
+<li>[bugfix] Consistent rule ordering</li>
+<li>[bugfix] Show message in report when <code>--prover_args</code> are incorrect</li>
+</ul>
+<h3>Static analysis and Performance</h3>
+<ul>
+<li>[feat] Automatic full unrolling of copy loops (no need to set <code>-copyLoopUnroll</code> option)</li>
+<li>[bugfix] Proper deduplication of libraries imported by different scene-level contracts</li>
+<li>[bugfix] Fix returns of static arrays</li>
+<li>[bugfix] make hashing of <code>encodePacked</code> <code>bytes</code> result deterministic when <code>-enableCopyLoopRewrites</code> is set to true</li>
+<li>[bugfix] Source-based call resolution is disabled by default except for constructor methods. Can be re-enabled with <code>--prover_args '-enableSolidityBasedInlining true'</code></li>
+</ul>
+<h3>Mutation Testing</h3>
+<ul>
+<li>[feat] Instead of running with 2 <code>conf</code> files, one for the Prover and one for mutation, now the mutation settings are stored in the Prover <code>conf</code> under the key mutations</li>
+<li>[feat] Relative paths to files to mutate are not relative to the mutation conf, but relative to current working directory</li>
+<li>[feat] Nicer help message for <code>certoraMutate</code></li>
+<li>[bugfix] Minor mutation testing <code>csv</code> output</li>
+<li>[bugfix] Default to optimistically running all mutants, not waiting for the original run</li>
+<li>[bugfix] Improved error messages for manual mutations</li>
+</ul>
+<h3>CLI</h3>
+<ul>
+<li>[feat] Instead of <code>--prover_args '-optimisticFallback true'</code> use <code>--optimistic_fallback</code></li>
+<li>[feat] Instead of <code>--prover_args '-contractRecursionLimit N'</code> use <code>--contract_recursion_limit N</code>, and a new flag <code>--optimistic_contract_recursion</code></li>
+<li>[feat] New option <code>--compiler_map</code> behaving exactly like <code>--solc_map</code></li>
+<li>[bugfix] Fix to <code>--address</code> when given without <code>0x</code> prefix</li>
+</ul>
+<h2>6.3.1 (February 2, 2024)</h2>
+<h3>CVL</h3>
+<ul>
+<li>[feat] {ref}<code>address-casting</code></li>
+<li>[feat] {ref}<code>ecrecover</code> builtin support</li>
+<li>[feat] Optimistically assume the <code>extcodesize</code> is positive for calls that are summarized and with a non-<code>HAVOC</code> summary. This behavior can be disabled with <code>--prover_args 'optimisticExtcodesize false'</code></li>
+<li>[feat] Support direct storage access in quantifiers and axioms</li>
+<li>[bugfix] Implication, bi-implication and ternary conditional operators are right-associative</li>
+<li>[bugfix] {ref}<code>Fully support additional environment fields &lt;env&gt;</code>. Namely, for <code>env e</code>, one can access <code>e.block.basefee</code>, <code>e.block.coinbase</code>, <code>e.block.difficulty</code>, <code>e.block.gaslimit</code> and <code>e.tx.origin</code></li>
+<li>[bugfix] Properly enforce bounds on enums accessed using direct storage access</li>
+<li>[bugfix] Fix a bug with structs being passed to summaries and not preserving their fields’ values</li>
+<li>[bugfix] Avoid hook inlining due to direct storage access</li>
+<li>[bugfix] Type checker will error in presence of non-boolean expressions in quantifiers' bodies</li>
+<li>[UX] Emit a global error in rule report if 0 rules are provided in the spec</li>
+<li>[UX] Cast assertions in CVL are treated like regular user-provided assertions</li>
+<li>[UX] Warn about, and ignore, unused <code>method</code> arguments</li>
+<li>[UX] Prevent calling library functions from CVL</li>
+</ul>
+<h3>Call Trace and Rule Report</h3>
+<ul>
+<li>[feat] Add presentation of direct storage reads and direct storage havocs, including showing the updates in the Storage State</li>
+<li>[feat] When the user provided no assertion message, show the assert condition</li>
+<li>[bugfix] More refined handling of branch snippets within loop iterations</li>
+<li>[bugfix] Ensure we get the correct TAC dump link</li>
+<li>[UX] Improved messages for assertions in builtin rules</li>
+<li>[UX] New presentation for invariants</li>
+<li>[UX] Branch snippets are now flattened, can be made hierarchical using <code>--prover_args '-flattenBranchesInCallTrace false'</code></li>
+</ul>
+<h3>Static analysis and Performance</h3>
+<ul>
+<li>[feat] <code>abi.encodeCall</code> calls will be considered as copy-loops, thus will not require a higher <code>--loop_iter</code> if we enable the following option: <code>--prover_args '-enableCopyLoopRewrites true'</code></li>
+<li>[feat] Better performance on last assertions in a rule if <code>--prover_args '-calltraceFreeOpt true'</code> is enabled</li>
+</ul>
+<h3>Misc</h3>
+<ul>
+<li>[feat] Support Vyper v0.3.10</li>
+<li>[bugfix] Various bug fixes to improve stability of the Prover (crashes, static analysis, and SMT solving)</li>
+<li>[bugfix] Better support of importing user-defined types from Solidity imports even if they are not given in a consistent fashion by <code>solc</code></li>
+</ul>
+<h2>6.1.3 (January 11, 2024)</h2>
+<h3>CVL</h3>
+<ul>
+<li>[feat] Rules can now use both <code>satisfy</code> and <code>assert</code> statements together</li>
+<li>[feat] An option for checking <code>satisfy</code> statements one-by-one instead of depending on previous <code>satisfy</code>-s, enabled with <code>--independent_satisfy</code></li>
+<li>[feat] {ref}<code>persistent-ghosts</code></li>
+<li>[feat] support <code>selector</code> keyword in <code>CALL</code>-like hooks that can be compared to function selectors</li>
+<li>[feat] New builtin function for hashing <code>keccak256</code> in CVL</li>
+<li>[feat] Support method parameter filters when invariants are imported with <code>use</code></li>
+<li>[feat] New options {ref}<code>--optimistic_summary_recursion</code> and {ref}<code>--summary_recursion_limit</code>.</li>
+<li>[bugfix] improved error messages for hooks</li>
+<li>[bugfix] Fix compile time checks for ghosts mappings axioms and bad CVL function calls therein</li>
+<li>[bugfix] Make <code>CONSTANT</code> summaries of internal functions consistent</li>
+<li>[bugfix] Allow Solidity struct fields named hook</li>
+<li>[bugfix] Fix <code>to_bytes</code> in quantifiers</li>
+<li>[bugfix] Better error message on struct decode failures</li>
+<li>[bugfix] Proper typing of sub-expressions of bitwise shift operations within quantifiers</li>
+<li>[UX] Nicer error messages for invalid use of <code>max_*</code> constants and hex literals</li>
+<li>[UX] Sanity builtin rule now succeeds when the sanity check succeeds (using <code>satisfy</code> under the hood) (note this can swap the expected result if you use the builtin sanity rule often, but you no longer have to interpret a “violated” result as the good one)</li>
+</ul>
+<h3>Performance</h3>
+<ul>
+<li>[feat] New optimization analysis. It can be configured to be more or less aggressive with the option <code>--prover_args '-intervals_rewriter INT'</code></li>
+<li>[feat] New flag for better performance: <code>--prover_args '-enableCopyLoopRewrites true'</code>  - replaces copy loop code blocks with a single copy command. Decreases problem size and obviates loop unrolling for copy loops (i.e., more sound)</li>
+<li>[feat] New flag for better performance: <code>--prover_args '-enableAggressivePartitionPruning true'</code> - for Solidity code that often manipulates - dynamic objects in memory</li>
+</ul>
+<h3>Call Trace</h3>
+<ul>
+<li>[feat] Show branch source information (can be disabled with <code>--prover_args '-enableConditionalSnippets false'</code>)</li>
+<li>[bugfix] Fix return value display for ghost reads</li>
+</ul>
+<h3>Mutation Testing</h3>
+<ul>
+<li>[feat] Generate mutation configuration automatically</li>
+<li>[UX] Expose errors emitted by Gambit</li>
+<li>[UX] <code>certoraMutate</code> now uses <code>.mconf</code> files instead of <code>.conf</code></li>
+</ul>
+<h3>Misc</h3>
+<ul>
+<li>[feat] enable the max constant loop unroll factor inferred with <code>--prover_args '-loopUnrollBoundGuessUpperLimit INT</code></li>
+<li>[bugfix] Vyper fixes for static arrays, xor patterns, <code>ABI</code> fetching in old versions</li>
+<li>[bugfix] Support for some older versions of Vyper (0.3.7 and earlier)</li>
+<li>[bugfix] Better decompilation for try/catch in a loop</li>
+<li>[bugfix] Fix to false negative tautology check</li>
+<li>[bugfix] Better retry mechanism for job-submission by <code>certora-cli</code></li>
+<li>[bugfix] Align with EVM by setting <code>x/0 = 0</code></li>
+<li>[bugfix] Fix storage analysis when Solidity optimizer is enabled</li>
+<li>[bugfix] Fixes in handling <code>solc</code>'s <code>--via-ir</code> optimizer mode</li>
+<li>[UX] Fix wait time in CLI to 2:30 hours, to account for possible long queue times in CI runs</li>
+</ul>
+<h2>5.0.5 (November 21, 2023)</h2>
+<p>Please find a list of the main changes in v5 here {doc}<code>/docs/cvl/v5-changes</code>.</p>
+<h3>CVL</h3>
+<ul>
+<li>[feat] Allowing calling Solidity functions from within CVL hooks</li>
+<li>[feat] {ref}<code>direct-storage-access</code></li>
+<li>[feat] Support for exhaustive parametric methods. Now <code>method f</code> calls will check for all methods in all contracts in Scene. The set of checked contracts can be limited with <code>--parametric_contracts Contract1 Contract2</code></li>
+<li>[bugfix] Disallow declaring method variables (aka <code>method f</code>; declarations) outside the top-level scope of a rule. They could still be declared as rule and CVL function arguments</li>
+<li>[bugfix] Remove assume/assert notation from <code>DELETE</code> summary qualifiers</li>
+<li>[bugfix] Disallow Solidity calls in CVL quantifier bodies</li>
+<li>[bugfix] Support the '$' sign in identifiers (specifically for Solidity functions)</li>
+<li>[UX] When non-reverting calls lead to an 'empty function' because all paths revert, show an alert in the rule report</li>
+</ul>
+<h3>Performance</h3>
+<ul>
+<li>[feat] New parallel splitter, can be enabled with <code>--prover_args '-newSplitParallel true'</code></li>
+<li>[feat] A new option for potential help with timeouts <code>--prover_args '-calltraceFreeOpt true'</code></li>
+<li>[feat] An option <code>-relaxedPointerSemantics</code> accepting a comma-separated list of <code>contract:methodWithoutParamTypes</code> pairs where the points-to analysis is allowed to be less strict</li>
+<li>[feat] Better support for internal function summaries when <code>--via-ir</code> option is used, enabled with <code>--function_finder_mode relaxed</code></li>
+<li>[bugfix] Errors for an optimization we call “Memory partitioning” will now show up as alerts in the Global Problems view</li>
+</ul>
+<h3>Misc</h3>
+<ul>
+<li>[feat] Solana call trace basic support</li>
+<li>[feat] Mutation testing: Allow <code>certoraMutate</code> to run with a link to an original run</li>
+<li>[feat] Allow to skip <code>solc</code> warnings we consider errors (undefined return values) with <code>--contract_compiler_skip_severe_warning_as_error</code></li>
+<li>[feat] <code>--send_only</code> is now the default mode except for CI users. Use <code>--wait_for_results</code> to force the old behavior</li>
+<li>[bugfix] Fixes for: Vyper, loop unrolling, CVL, memory consumption, storage splitting</li>
+<li>[bugfix] Remove support for native array theory in SMT</li>
+<li>[bugfix] Mutation testing: only delete files created by the mutation tester</li>
+<li>[UX] Old CLI format is now obsolete</li>
+<li>[UX] CVL1 type checker is not run anymore for compatibility checks</li>
+<li>[UX] <code>--solc_args</code> is deprecated</li>
+</ul>
+<h2>4.13.1 (September 26, 2023)</h2>
+<p>Minor improvements.</p>
+<ul>
+<li>[feat] Present array length accesses in call  trace</li>
+<li>[bugfix] Report timeouts of sanity checks</li>
+</ul>
+<h2>4.12.1 (September 17, 2023)</h2>
+<h3>CVL</h3>
+<ul>
+<li>[bugfix] fix to bitwise operations</li>
+<li>[bugfix] verify range of <code>nativeBalances[addr]</code> values</li>
+<li>[bugfix] no duplication of multi-dimensional ghosts with axioms</li>
+<li>[feat] delete summary qualifiers for faster preprocessing and dealing with analysis-breaking external functions. If a function is never called from spec, it will not be processed. In cases where it is externally called from Solidity, the summary will apply.</li>
+<li>[feat] greater flexibility of internal summaries - allows accepting as arguments and returning certain reference types: primitive arrays, <code>bytes</code>, and structs which may (in nested structs too) contain primitive arrays</li>
+<li>[feat] support multiple return values from CVL functions</li>
+<li>[bugfix] Support keywords as struct fields and user defined type names</li>
+<li>[bugfix] Fix to multi-assert mode when multiple CVL asserts in a rule share the same message</li>
+<li>[UX] Skip rules where all methods are filtered out</li>
+<li>[bugfix] Do not drop quantifiers when instrumenting vacuity checks</li>
+<li>[UX] Improved error messages for preserved block errors</li>
+<li>[bugfix] Support invariant preserved blocks for functions with an argument which is an array of structs</li>
+<li>[feat] New keyword: <code>executingContract</code> available inside opcode hooks</li>
+<li>[bugfix] Applying the CALL opcode hook even if the balance transfer fails</li>
+<li>[bugfix] Support assigning to a wildcard variable</li>
+<li>[bugfix] Fail if CVL function is non-void and does not end with a return statement</li>
+</ul>
+<h3>Performance</h3>
+<ul>
+<li>[feat] Optimizations for safe math handling, in particular for <code>solc</code> versions 8.19 and up</li>
+<li>[feat] Better performance of <code>string</code> and array types</li>
+</ul>
+<h3>Call Trace &amp; Rule Report</h3>
+<ul>
+<li>[feat] Show storage changed since the start</li>
+<li>[feat] More frequent rule-report update</li>
+<li>[bugfix] Rule running time to show time interval instead of sum of sub-rules intervals</li>
+<li>[feat] Show state of ghosts together with contract state</li>
+<li>[bugfix] Fix formatting of values of type <code>bytesN</code> and of storage locations</li>
+</ul>
+<h3>CLI</h3>
+<ul>
+<li>[bugfix] link to CVL2 migration document fixed</li>
+<li>[bugfix] support for other formats of protocol author in <code>package.json</code> files</li>
+<li>[bugfix] fix error message when passing global timeout setting</li>
+<li>[bugfix] less verbose prints in terminal</li>
+<li>[UX] Validate rule names</li>
+<li>[UX] Show number of splits solved per rule and their "weight"</li>
+<li>[bugfix] Fixes to equivalence checker</li>
+</ul>
+<h3>Mutation Verification</h3>
+<ul>
+<li>[bugfix] correct traversing of rules</li>
+<li>[feat] improved csv output</li>
+</ul>
+<h3>Equivalence Checker</h3>
+<ul>
+<li>[feat] Support void functions</li>
+<li>[feat] Support compiler comparison</li>
+<li>[bugfix] Making comparison more reliable in terms of initial state and with respect to low-level calls</li>
+</ul>
+<h2>4.10.1 (August 21, 2023)</h2>
+<h3>CVL</h3>
+<ul>
+<li>[feat] Support Solidity calls also from internal summaries</li>
+<li>[feat] Allowing <code>with(env)</code> for summaries {ref}<code>with-env</code></li>
+<li>[bugfix] <code>lastStorage</code> comparison fix for ghost maps</li>
+<li>[bugfix] Bitwidth for <code>bytesK</code> variables is ensured, important for revert characteristic rules for methods accepting <code>bytesK</code></li>
+<li>[bugfix] Fixing <code>struct</code>s encoding</li>
+<li>[bugfix] Matching method summaries for methods accepting <code>interface</code>s</li>
+<li>[bugfix] Some improvements to how quantifiers calling Solidity functions are handled</li>
+</ul>
+<h3>Mutation Verification</h3>
+<ul>
+<li>[feat] Output CSV files of the results</li>
+<li>[bugfix] Manual mutations work and support for multiple manual mutations</li>
+<li>[bugfix] <code>certoraMutate</code> working when running from project’s root</li>
+</ul>
+<h3>Timeouts and performance</h3>
+<ul>
+<li>[feat] Show informative messages about cache hits</li>
+<li>[bugfix] fix hashes of constant strings in constructors vs. in executable bytecode</li>
+</ul>
+<h3>Linking</h3>
+<ul>
+<li>[bugfix] Fixing source-based heuristics linking to decrease chance for wrong matches</li>
+<li>[bugfix] Fixes to sighash resolution</li>
+<li>[bugfix] Correct revert handling in dispatched calls</li>
+</ul>
+<h3>Vyper</h3>
+<ul>
+<li>[bugfix] Support for versions below 0.2.16 (from before storage layout output was introduced in Vyper)</li>
+</ul>
+<h2>4.8.0 (August 13, 2023)</h2>
+<h3>New features and enhancements</h3>
+<h4>CVL</h4>
+<ul>
+<li>Better expressivity: <code>ALWAYS</code> summaries can get <code>bytesK</code> arguments, e.g. <code>... =&gt; ALWAYS(to_bytesK(...))</code></li>
+<li>Support for <code>ALL_SLOAD</code> and <code>ALL_SSTORE</code> hooks (see {ref}<code>rawhooks</code>)</li>
+<li>Improved ABI encoding/decoding in CVL</li>
+<li>More efficient handling of skipped rules</li>
+<li>Allow calling Solidity functions from expression summaries</li>
+</ul>
+<h4>Call Trace and Rule Report</h4>
+<ul>
+<li>Display havoced return values</li>
+<li>Fixes to dump generation</li>
+<li>Improved timeout visualization in TAC dumps</li>
+<li>Fixes to presentation of quantified formulas in Call Trace</li>
+<li>Better presentation of timeouts</li>
+<li>Rule report will contain warnings about unused summaries</li>
+<li>Display native balances</li>
+<li>More friendly text for dispatcher-based resolutions</li>
+<li>Improved ghost presentation</li>
+</ul>
+<h4>Performance</h4>
+<ul>
+<li>Rule cache is enabled</li>
+<li>Reducing number of iterations of static analyses</li>
+<li>Improved decompiler performance</li>
+</ul>
+<h4>Mutation Verifier</h4>
+<ul>
+<li>Manual mutants now supported in <code>certoraMutate</code></li>
+</ul>
+<h4>Equivalence Checker</h4>
+<ul>
+<li>Support for Vyper for the equivalence checker (<code>certoraEqCheck</code> utility)</li>
+</ul>
+<h4>CLI</h4>
+<ul>
+<li>Allowing more Solidity file names</li>
+<li>More compact zip input to cloud</li>
+<li>Users can reduce the global timeout below 2 hours using {ref}<code>--global_timeout</code></li>
+</ul>
+<h3>Bug fixes</h3>
+<h4>CVL</h4>
+<ul>
+<li>More graceful handling of bit-vector mode so that it emits less errors. It should be noted that numbers are forced to the 256-bit range and thus it is not recommended to use bit-vector mode. </li>
+<li>Declaration of wildcard (i.e. <code>_</code>) variable names in rules or rule arguments is disallowed</li>
+<li>Internal summaries - disallow <code>NONDET</code> summary on functions returning a pointer, as well as <code>HAVOC</code> or <code>HAVOC_ECF</code> summaries</li>
+<li>Better checks on ghost axioms, especially if they refer to definitions</li>
+<li>Fixing array literal assignments</li>
+<li>Forbid assignments to array elements, i.e. <code>uint[] a; a[0] = x;</code> is disallowed</li>
+<li>Internal summarization did not work in certain tricky cases involving loops and external calls</li>
+<li>Fixing "Certora Prover Internal Error" sometimes appearing when reasoning on complex-typed arrays</li>
+<li>Fixes for structs with contract types as fields</li>
+</ul>
+<h4>Call Trace</h4>
+<ul>
+<li>Fix call trace generation issues for <code>forall</code> expressions</li>
+</ul>
+<h4>Mutation Verifier</h4>
+<ul>
+<li>Correctly dealing with original runs where rules were originally violated</li>
+</ul>
+<h4>Misc.</h4>
+<ul>
+<li>Static analyses bug fixes</li>
+<li>Fixes to read-only reentrancy rule</li>
+<li>Avoiding an exception when <code>-dontStopAtFirstSplitTimeout</code> completes with all splits timing out</li>
+</ul>
+<h3>Other improvements</h3>
+<ul>
+<li>Better parallelism and utilization</li>
+<li>Timeout cores and more difficulty traces and hints to study timeout causes</li>
+<li>Support for Solidity compiler version 0.8.20 and up</li>
+</ul>
+<h2>4.5.1 (July 15, 2023)</h2>
+<h3>New features</h3>
+<h4>CVL</h4>
+<ul>
+<li>Better expressivity: Allow binding the called contract in summaries using <code>calledContract</code> (see {ref}<code>function-summary</code>)</li>
+<li>Ease of use: Support reading and passing complex array and struct types in CVL. For example, you can write now:
+<code>cvl
+env e;
+uint v;
+Test.MyComplexStruct x;
+uint[] thingArray = x.nested[v].thing;
+require thingArray.length == 3;
+assert foo(e, x, v) == 3;
+</code></li>
+</ul>
+<p>For the Solidity snippet of a contract <code>Test</code>:
+```solidity
+struct MyComplexStruct {
+    MyInnerStruct[] nested;
+}</p>
+<p>struct MyInnerStruct {
+    uint[] thing;
+    uint field;
+}</p>
+<p>function foo(MyComplexStruct memory z, uint x) external returns (uint) {
+    return z.nested[x].thing.length;
+}
+```</p>
+<ul>
+<li><p>Ease of use: Support access for storage variables whose type is either a primitive, a user defined value, or an enum</p></li>
+<li><p>Ease of use: Enum types can be cast to integer types in CVL using the usual <code>assert_TYPE</code> and <code>require_TYPE</code> operators (see {ref}<code>cvl2-integer-types</code>)</p></li>
+<li><p>A built-in rule for read-only reentrancy vulnerabilities</p></li>
+</ul>
+<h4>Call Trace</h4>
+<ul>
+<li>Better view of the storage state at storage assignments, storage restore points, and storage comparisons</li>
+</ul>
+<h4>Multi-contract handling</h4>
+<ul>
+<li><p>Improvements to the call resolution fallback mechanism in case main analyses fail, allowing linking and summarizations despite the failures</p></li>
+<li><p>Introducing <code>summarizeExtLibraryCallsAsNonDetPreLinking</code> Prover option for easier setup of library-heavy code. See {ref}<code>library_timeouts</code></p></li>
+</ul>
+<h4>Mutation Verifier</h4>
+<ul>
+<li>New and easier to use <code>certoraMutate</code>. See {doc}<code>/docs/gambit/mutation-verifier</code></li>
+</ul>
+<h3>Bug fixes</h3>
+<h4>CVL</h4>
+<ul>
+<li>Fix issue when CVL functions are invoked within ternary expressions</li>
+<li>Fix evaluation of power expressions such as 2^256</li>
+<li>Make sure CVL keywords can appear as struct fields and be accessible from CVL</li>
+</ul>
+<h4>Performance</h4>
+<ul>
+<li>Performance optimizations for the contract preprocessing step</li>
+<li>Performance improvements in Prover</li>
+<li>Performance improvements in CVL type checker (allows for faster job submission)</li>
+</ul>
+<h4>UX</h4>
+<ul>
+<li>Show primary contract under verification even when a job is queued but not yet started</li>
+<li>{ref}<code>envfree &lt;envfree&gt;</code> checks failures presented not just in rules section, but also in the problems view for highlighting</li>
+<li>Make sure more files generated by <code>certoraRun</code> are stored in <code>.certora_internal</code></li>
+<li>Allow equivalence checker to have the same function name appear in two contracts</li>
+</ul>
+<h2>4.3.1 (July 2, 2023)</h2>
+<h3>New features</h3>
+<h4>CVL</h4>
+<ul>
+<li>New builtin rules: {ref}<code>sanity &lt;built-in-sanity&gt;</code> and {ref}<code>deepSanity &lt;built-in-deep-sanity&gt;</code></li>
+<li>Support a new keyword in CVL: {ref}<code>satisfy &lt;satisfy&gt;</code></li>
+<li>User-defined types can appear in hook patterns</li>
+<li>Support using <code>currentContract</code> in ghosts and quantified expressions</li>
+<li>Support conversion of <code>uintN</code> to <code>bytesK</code> with casting {ref}<code>bytesN-support</code></li>
+<li>Support {ref}<code>nativeBalances &lt;special-fields&gt;</code> in CVL</li>
+<li>Making access of user-defined-types (enums, structs, user-defined type values) in Solidity consistent, whether those types are declared in a contract or outside of a contract. Specifically, for a user-defined type that's declared in a contract, the access to it in a spec file is <code>DeclaringContract.TypeName</code>. For top-level user-defined types (declared outside of any contract/library) the access is using the using contract <code>UsingContract.TypeName</code>.</li>
+<li>Support for {ref}<code>EVM opcode hooks &lt;opcode-hooks&gt;</code></li>
+</ul>
+<h4>CallTrace</h4>
+<ul>
+<li>Display CVL functions in Call Trace</li>
+<li>CallTrace presenting skolemized variables for quantified expressions</li>
+<li>Gather all setup labels in CallTrace to be under one label</li>
+<li>Make CallTrace accept invocation of internal solidity functions from CVL</li>
+</ul>
+<h4>Summarization</h4>
+<ul>
+<li>Early summarization of internal functions for improved performance and precision</li>
+<li>{ref}<code>“catch-all” summaries &lt;library_timeouts&gt;</code>. For example, given a library <code>L</code> on which we wish to apply the same summary for all external methods in <code>L</code>, write <code>function L._ external =&gt; NONDET</code></li>
+</ul>
+<h4>Performance</h4>
+<ul>
+<li>More stable generation of formulas for more predictable, consistent running times of rules</li>
+<li>Basic parallel splitting for improved running time of rule solving</li>
+</ul>
+<h4>Other improvements</h4>
+<ul>
+<li>Change default to new <code>certora-cli</code> API</li>
+<li>Check for an invalid rule name (given with <code>--rule</code>) locally, before sending a request to the server</li>
+<li>Adapt CVL AST serialization to JSON to enable LSP for CVL2</li>
+<li>Visualize unsolved splits in timeouts</li>
+</ul>
+<h3>Bug fixes</h3>
+<ul>
+<li>Warn if <code>CONST</code> summary is applied to methods that return nothing</li>
+<li>The type checker will fail if an internal method summary uses an inheriting contract name instead of the declaring contract name</li>
+<li>Disallow shadowing of ghost variables</li>
+<li>Support exists as a struct field in spec files</li>
+<li><code>require_</code> and <code>assert_</code> casts disallowed in ghost axioms</li>
+<li>CallTrace bug fixes</li>
+</ul>
+<h2>4.0.5 (June 7, 2023) CVL 2</h2>
+<h3>Breaking changes</h3>
+<ul>
+<li>Upgrade to CVL 2 (see {doc}<code>/docs/cvl/cvl2/changes</code> and {doc}<code>/docs/cvl/cvl2/migration</code>) </li>
+<li>Change the minimal python required version from 3.8.0 to 3.8.16</li>
+</ul>
+<h3>New features</h3>
+<ul>
+<li>{ref}<code>storage-comparison</code></li>
+<li>Add support for Vyper</li>
+<li>Support <code>CONSTANT</code> summaries for all non-dynamic return types</li>
+<li>New {ref}<code>built-in rules &lt;built-in&gt;</code> <code>sanity</code> and <code>deepSanity</code></li>
+<li>Added <code>--protocol_name</code> and <code>--protocol_owner</code> flags</li>
+</ul>
+<h3>Other improvements</h3>
+<ul>
+<li>Performance improvements</li>
+<li>Bug fixes and internal improvements</li>
+<li>Improved error messages</li>
+<li>Improved console output</li>
+<li>Improved call resolution output</li>
+</ul>
+</body></html>
