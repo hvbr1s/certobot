@@ -34,7 +34,7 @@ researcher = Agent(
   memory=True,
   backstory=(
     """
-      Driven by curiosity, you're at the forefront of cybersecurity applied to blockchain and an expert in Ledger products including the Ledger Nano S Plus, Nano X, Ledger Stax and the Ledger Live app.
+      Driven by curiosity, you're at the forefront of cybersecurity applied to blockchain and an expert in Certora products including the Prover and Gambit.
       
     """
   ),
@@ -42,6 +42,7 @@ researcher = Agent(
   allow_delegation=False,
   llm=groq,
   step_callback=lambda x: print_agent_output(x,"Senior Researcher"),
+  max_iter=3,
 )
 
 # Creating a writer agent

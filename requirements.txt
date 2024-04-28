@@ -9,6 +9,7 @@ uvicorn
 fastapi
 slowapi
 httpx
+jinja2
 tiktoken
 bs4
 apscheduler

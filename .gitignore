@@ -1,3 +1,4 @@
 .env
 venvcertobot/
 pinecone_pipeline/bytebot/
+__pychache__/

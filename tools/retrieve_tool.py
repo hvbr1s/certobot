@@ -14,8 +14,7 @@ pinecone_key = os.environ['PINECONE_API_KEY']
 pc = Pinecone(
     api_key=pinecone_key,
 )
-pc_index = pc.Index("main")
-backup_index= pc.Index("backup")
+pc_index = pc.Index("certora")
 # Initialize Cohere
 cohere_key = os.environ["COHERE_API_KEY"]
 co = cohere.Client(cohere_key)
@@ -76,22 +75,8 @@ def retriever_tool(query:str) -> str:
             )
 
         except Exception as e:
-            print(e)
-            # Pull chunks from the legacy Pinecone fallback
-            print('Serverless response failed, falling back to legacy Pinecone')
-            try:
-                # Pull chunks from the backup Pinecone instance
-                res_query = backup_index.query(
-                    vector=xq,
-                    top_k=8,
-                    namespace="eng",
-                    include_values=True,
-                    include_metadata=True,
-                )
-
-            except Exception as e:
-                print(f"Fallback Pinecone query failed: {e}")
-                return
+            print(f"Pinecone query failed: {e}")
+            return
 
         # Format docs from Pinecone response
         learn_more_text = (' Learn more at')
@@ -106,8 +91,8 @@ def retriever_tool(query:str) -> str:
     # Try re-ranking with Cohere
     try:
         # Dynamically choose reranker model based on locale
-        reranker_main = 'rerank-multilingual-v3.0' if locale in ['fr', 'ru'] else '04461047-71d5-4a8e-a984-1916adbcd394-ft'
-        reranker_backup = 'rerank-multilingual-v3.0' if locale in ['fr', 'ru'] else 'rerank-english-v3.0'
+        reranker_main = 'rerank-multilingual-v3.0' if locale in ['fr', 'ru'] else 'rerank-english-v3.0'
+        reranker_backup = 'rerank-multilingual-v2.0' if locale in ['fr', 'ru'] else 'rerank-english-v2.0'
 
         try:# Rerank docs with Cohere
 
@@ -193,7 +178,7 @@ async def simple_retrieve(user_input):
             try:
                 # Pull chunks from the serverless Pinecone instance
                 pinecone_response = await client.post(
-                    "https://main-e865e64.svc.aped-4627-b74a.pinecone.io/query",
+                    "https://certora-b4d15e3.svc.aped-4627-b74a.pinecone.io/query",
                     json={
 
                         "vector": xq, 
@@ -216,36 +201,8 @@ async def simple_retrieve(user_input):
                 res_query = pinecone_response.json()
 
             except Exception as e:
-                print(e)
-                # Pull chunks from the legacy Pinecone fallback
-                print('Serverless response failed, falling back to legacy Pinecone')
-                try:
-                    pinecone_response = await client.post(
-                        "https://backup-e865e64.svc.eu-west4-gcp.pinecone.io/query",
-                        json={
-
-                            "vector": xq, 
-                            "topK": 8,
-                            "namespace": "eng", 
-                            "includeValues": True, 
-                            "includeMetadata": True
-
-                        },
-                        headers={
-
-                            "Api-Key": pinecone_key,
-                            "Accept": "application/json",
-                            "Content-Type": "application/json" 
-
-                        },
-                        timeout=25,
-                    )
-
-                    pinecone_response.raise_for_status()
-                    res_query = pinecone_response.json()
-                except Exception as e:
-                    print(f"Fallback Pinecone query failed: {e}")
-                    return
+                print(f'Retrieval failed: {e}')
+                return
   
             # Format docs from Pinecone response
             learn_more_text = ('\nLearn more at')
@@ -259,7 +216,7 @@ async def simple_retrieve(user_input):
         # Try re-ranking with Cohere
         try:
             # Dynamically choose reranker model based on locale
-            reranker_main = '04461047-71d5-4a8e-a984-1916adbcd394-ft' # finetuned on March 11, 2024 
+            reranker_main = 'rerank-multilingual-v3.0' if locale in ['fr', 'ru'] else 'rerank-english-v3.0'
             reranker_backup = 'rerank-multilingual-v2.0' if locale in ['fr', 'ru'] else 'rerank-english-v2.0'
 
             try:# Rerank docs with Cohere
