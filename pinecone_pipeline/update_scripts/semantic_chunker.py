@@ -3,14 +3,16 @@ import json
 import os
 import re
 from pathlib import Path
-from bs4 import BeautifulSoup
 from tqdm.auto import tqdm
 from collections import Counter
 from langchain_experimental.text_splitter import SemanticChunker
 from langchain_openai.embeddings import OpenAIEmbeddings
 import tiktoken
+from dotenv import load_dotenv
 
+load_dotenv()
 
+openai_key = os.environ['OPENAI_API_KEY']
 
 ################### HC CHUNKER ######################
 class Document:
@@ -24,33 +26,22 @@ class Document:
             'metadata': self.metadata
         }
 
-def load_html_file(file_path):
-    file_name = Path(file_path).name
-    assert os.path.isfile(file_path) and file_name.lower().endswith('.html'), f'{file_path} is not a valid HTML file'
+def load_md_file(file_path):
+    file_name = Path(file_path).stem  # Use stem to get the file name without extension
+    print(f'File name: {file_name}')
     with open(file_path, "r", encoding="utf-8") as f:
         content = f.read()
 
-    soup = BeautifulSoup(content, "html.parser")
+    # For markdown, we don't need to remove HTML tags, so we skip that part
 
-    # Remove <span> tags from the content
-    for span_tag in soup.find_all("span"):
-        span_tag.unwrap()
+    # Use the file name as the title
+    title = file_name
 
-    # Remove <path> tags from the content
-    for path_tag in soup.find_all("path"):
-        path_tag.decompose()
+    # No HTML metadata to extract, so we create an empty dictionary
+    metadata = {'title': title}
 
-    title_tag = soup.find("h1")
-    title = title_tag.text if title_tag else file_name
-
-    # Extract all metadata into a dictionary
-    metadata = {}
-    meta_tags = soup.find_all("meta")
-    for meta_tag in meta_tags:
-        metadata.update({meta_tag.get("name"): meta_tag.get("content")})
-
-    # Extract the text, discarding the HTML tags
-    text_without_tags = soup.get_text()
+    # The text is the content of the markdown file
+    text_without_tags = content
     # Collapse any instances of multiple whitespaces down to a single whitespace
     text_with_collapsed_whitespace = re.sub(r'\s+', ' ', text_without_tags)
     return Document(page_content=text_with_collapsed_whitespace, metadata=metadata)
@@ -58,20 +49,21 @@ def load_html_file(file_path):
 def load_files(directory_path):
     docs = []
     for file_name in os.listdir(directory_path):
+        if not file_name.lower().endswith('.md'):
+            continue  # Skip non-markdown files
         file_path = os.path.join(directory_path, file_name)
-        doc = load_html_file(file_path)
+        doc = load_md_file(file_path)
         docs.append(doc)
     return docs
 
 text_splitter = SemanticChunker(
     OpenAIEmbeddings(
-
-        model= 'text-embedding-3-large',
-        chunk_size= 512,
-
+        openai_api_key=openai_key,
+        model='text-embedding-3-large',
+        chunk_size=512,
     )
-
 )
+
 # Define the length function
 def tiktoken_len(text):
     # Initialize the tokenizer
@@ -99,57 +91,50 @@ def count_chars_in_json(file_name):
 
     return char_counts
 
-
 def run_chunker(output_directory_path: str = None, chunk_size: int = 512, chunk_overlap: int = 0, minimum_chunk_size: int = 50):
     # Initialize the loader and load documents
     if not output_directory_path:
         pinecone_pipeline_root_directory = os.path.dirname(os.path.dirname(__file__))
-        output_directory_path = os.path.join(pinecone_pipeline_root_directory, 'output_files')
-    scraped_articles_folder = os.path.join(output_directory_path, 'articles')
+        output_directory_path = os.path.join(pinecone_pipeline_root_directory, 'update_scripts')
+    scraped_articles_folder = os.path.join(output_directory_path, 'md_output')
     output_json_file_path = os.path.join(output_directory_path, 'output.json')
-    chunk_list = [] # list of chunks to be written to the json file
+    chunk_list = []  # list of chunks to be written to the json file
 
     # Process each document
     with open(output_json_file_path, 'w+', encoding='utf-8') as f:
         for file_name in tqdm(os.listdir(scraped_articles_folder)):
+            if not file_name.lower().endswith('.md'):
+                continue  # Skip non-markdown files
             file_path = os.path.join(scraped_articles_folder, file_name)
-            doc = load_html_file(file_path)
+            doc = load_md_file(file_path)
             
             # Check if the document content is empty or invalid
             if not doc.page_content.strip():
                 print(f"Skipping empty or invalid content in file: {file_name}")
                 continue
             
-            if 'source' in doc.metadata:
-                url = doc.metadata['source']
-                # Initialize the MD5 hash object
-                md5 = hashlib.md5(url.encode('utf-8'))
-                uid = md5.hexdigest()[:12]
-            else:
-                url = None
-                uid = "unknown"
+            # Generate a unique ID for the document
+            uid = hashlib.md5(doc.page_content.encode('utf-8')).hexdigest()[:12]
 
             try:
                 chunks = text_splitter.create_documents([doc.page_content])
-
                 for i, chunk in enumerate(chunks):
                     chunk_text = chunk.page_content  # Extract text from the Document object
                     entry = {
-                        'source': doc.metadata.get('source', ''),
-                        'source-type': doc.metadata.get('source-type', ''),
-                        'locale': doc.metadata.get('locale', ''),
+                        'source': doc.metadata.get('source', 'https://docs.certora.com/en/latest/'),
+                        'source-type': doc.metadata.get('source-type', 'documentation'),
                         'title': doc.metadata.get('title', ''),
                         'id': f'{uid}-{i}',
                         'chunk-uid': uid,
                         'chunk-page-index': i,
                         'text': chunk_text,
-                        }
+                    }
                     chunk_list.append(entry)
-            except IndexError as e:
+            except Exception as e:
                 print(f"Error processing file {file_name}: {e}")
                 continue
             
-        json.dump(chunk_list, f, ensure_ascii=False) # write the list of chunks to the json file
+        json.dump(chunk_list, f, ensure_ascii=False)  # write the list of chunks to the json file
 
     # Character count
     counts = count_chars_in_json(output_json_file_path)
@@ -161,3 +146,4 @@ def run_chunker(output_directory_path: str = None, chunk_size: int = 512, chunk_
 
 if __name__ == "__main__":
     run_chunker(chunk_size=512)
+

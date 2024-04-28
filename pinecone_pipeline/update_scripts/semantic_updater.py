@@ -13,22 +13,14 @@ load_dotenv()
 pinecone_key = os.environ['PINECONE_API_KEY']
 
 # Prod DB
-index_name = 'main'
-pc_host = 'https://main-e865e64.svc.aped-4627-b74a.pinecone.io'
-# Backup DB
-backup_index_name = 'backup'
-backup_pc_host = 'https://backup-e865e64.svc.eu-west4-gcp.pinecone.io'
+index_name = 'certora'
+pc_host = 'https://certora-b4d15e3.svc.aped-4627-b74a.pinecone.io'
 
 pc = Pinecone(api_key=pinecone_key)
 index = pc.Index(
         index_name,
         host=pc_host
 )
-backup_index = pc.Index(
-        backup_index_name,
-        host=backup_pc_host
-)
-
 # Initialize OpenAI client
 client = OpenAI()
 
@@ -42,7 +34,7 @@ def run_updater(json_file_path:str = None):
     pinecone_pipeline_root_directory = os.path.dirname(os.path.dirname(__file__))
     output_folder = os.path.join(pinecone_pipeline_root_directory, 'output_files')
     if not json_file_path:
-        json_file_path = os.path.join(output_folder, 'output.json')
+        json_file_path = '/home/dan/certorabot/pinecone_pipeline/update_scripts/output.json'
     documents = read_json_file(json_file_path)
     
     # Define batch size
@@ -73,12 +65,6 @@ def run_updater(json_file_path:str = None):
                 index_stats_response = index.describe_index_stats()
                 print(f'\nMain database updated! -> {index_stats_response}')
 
-                backup_index.upsert(
-                    vectors=to_upsert,
-                    namespace='eng'
-                )
-                backup_index_stats_response = backup_index.describe_index_stats()
-                print(f'\nBackup database updated! -> {backup_index_stats_response}')
             except:
                 print(f'Oops something went wrong, trying again!')
                 time.sleep(15)
@@ -88,13 +74,6 @@ def run_updater(json_file_path:str = None):
                     namespace='eng'
                 )
                 print(f'Main database updated!')
-
-                # Try again > backup
-                backup_index.upsert(
-                    vectors=to_upsert,
-                    namespace='eng'
-                ) 
-                print(f'Backup database updated!')
  
         except Exception as e:
             print(f"Failed to upsert the following data: {to_upsert}")

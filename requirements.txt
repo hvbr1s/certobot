@@ -18,5 +18,5 @@ langchain
 langchain_experimental 
 langchain_openai
 langchain-groq
-bytebot
+llama-parse
 markdown2
