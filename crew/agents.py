@@ -42,7 +42,7 @@ researcher = Agent(
   allow_delegation=False,
   llm=groq,
   step_callback=lambda x: print_agent_output(x,"Senior Researcher"),
-  max_iter=3,
+  max_iter=10,
 )
 
 # Creating a writer agent

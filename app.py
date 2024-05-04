@@ -168,33 +168,33 @@ async def ragchat(user_id, chat_history):
 
         ##### OpenAI #####
         # retrieved_context = await simple_retrieve(function_call_query)
-        retrieved_context =  res = await agent(function_call_query)
-        troubleshoot_instructions = "CONTEXT: " + "\n" + timestamp + " ." + retrieved_context + "\n\n" + "----" + "\n\n" + "ISSUE: " + "\n" + function_call_query
+        # retrieved_context =  res = await agent(function_call_query)
+        # troubleshoot_instructions = "CONTEXT: " + "\n" + timestamp + " ." + retrieved_context + "\n\n" + "----" + "\n\n" + "ISSUE: " + "\n" + function_call_query
 
-        try:
-                res = await openai_client.chat.completions.create( #with OpenAI
-                #res = groq_client.chat.completions.create( #with Llama3
-                    temperature=0.0,
-                    model=gpt,
-                    messages=[
+        # try:
+        #         res = await openai_client.chat.completions.create( #with OpenAI
+        #         #res = groq_client.chat.completions.create( #with Llama3
+        #             temperature=0.0,
+        #             model=gpt,
+        #             messages=[
 
-                        {"role": "system", "content": SALES_ASSISTANT_PROMPT },
-                        {"role": "user", "content": troubleshoot_instructions}
+        #                 {"role": "system", "content": SALES_ASSISTANT_PROMPT },
+        #                 {"role": "user", "content": troubleshoot_instructions}
 
-                    ],
-                    timeout= 45.0
-                )
-                new_reply = res.choices[0].message.content
-                print(f"Query processed succesfully!")
+        #             ],
+        #             timeout= 45.0
+        #         )
+        #         new_reply = res.choices[0].message.content
+        #         print(f"Query processed succesfully!")
       
         ######  CrewAI  #######
 
-        # try:
+        try:
 
-        #     res = await agent(function_call_query) # use CrewAI
-        #     print(res)
-        #     #new_reply = res.choices[0].message.content  
-        #     print(f"Query processed succesfully!")
+            res = await agent(function_call_query) # use CrewAI
+            print(res)
+            #new_reply = res.choices[0].message.content  
+            print(f"Query processed succesfully!")
         
         except Exception as e:
                 print(f"OpenAI completion failed: {e}")
@@ -202,7 +202,7 @@ async def ragchat(user_id, chat_history):
 
         USER_STATES[user_id]['previous_queries'][-1]['assistant'] = res
 
-        return new_reply
+        return res
     
     # Extract reply content
     elif res.choices[0].message.content is not None:

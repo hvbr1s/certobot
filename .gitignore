@@ -1,4 +1,5 @@
 .env
+__pychache__/
 venvcertobot/
 pinecone_pipeline/bytebot/
-__pychache__/
+pinecone_pipeline/update_scripts/github_docs/
