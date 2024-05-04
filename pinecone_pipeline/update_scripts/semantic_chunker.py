@@ -32,13 +32,11 @@ def load_md_file(file_path):
     with open(file_path, "r", encoding="utf-8") as f:
         content = f.read()
 
-    # For markdown, we don't need to remove HTML tags, so we skip that part
-
     # Use the file name as the title
-    title = file_name
+    title = file_name.upper()
 
     # No HTML metadata to extract, so we create an empty dictionary
-    metadata = {'title': title}
+    metadata = {'title': f'#TITLE: {title}.#'}
 
     # The text is the content of the markdown file
     text_without_tags = content
