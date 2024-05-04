@@ -3,8 +3,6 @@ from crewai import Agent
 from tools.retrieve_tool import retriever_tool
 from langchain_openai import ChatOpenAI
 from langchain_groq import ChatGroq
-from langchain.agents import load_tools
-from utility.callback import print_agent_output
 from dotenv import main
 
 main.load_dotenv()
@@ -34,7 +32,6 @@ researcher = Agent(
   tools=[retriever_tool],
   allow_delegation=False,
   llm=gpt,
-  step_callback=lambda x: print_agent_output(x,"Senior Researcher"),
   max_iter=10,
 )
 
