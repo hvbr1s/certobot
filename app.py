@@ -1,11 +1,11 @@
 import os
 from dotenv import main
-from system.prompts import INVESTIGATOR_PROMPT, SALES_ASSISTANT_PROMPT
+from system.prompts import INVESTIGATOR_PROMPT
 from tools.retrieve_tool import simple_retrieve
 from fastapi.security import APIKeyHeader
 from fastapi import FastAPI, HTTPException, Depends
-from crew.agents import researcher, writer, sales_assistant
-from tasks.list import research_issue, write, assist_customer
+from crew.agents import researcher
+from tasks.list import research_issue
 from crewai import Crew, Process
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
@@ -18,8 +18,6 @@ from datetime import datetime
 import json
 import asyncio
 import time
-
-
 
 # Initialize environment variables
 main.load_dotenv()

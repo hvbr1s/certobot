@@ -1,5 +1,5 @@
 from crewai import Task
-from crew.agents import researcher, writer, topic_getter, sales_assistant
+from crew.agents import researcher
 
 # Research task
 research_issue= Task(
@@ -13,50 +13,11 @@ research_issue= Task(
 
     """
   ),
-  expected_output="A summary of the solution and the URL link to the relevant documentation that answers: '{topic}'",
+  expected_output="A detailed summary of the solution and the URL link to the relevant documentation that answers: '{topic}'",
   agent=researcher,
   async_execution=False,
 )
 
-write= Task(
-  description=(
-    "Write a technical yet easy to understand answer to {topic}."
-  ),
-  expected_output=    """
-    A SHORT answer to this question: {topic}. Your answer must be friendly and engaging but ALWAYS be 3 sentences or less. 
-    Use the provided documentation to inform your response.
-    For more information, ALWAYS cite your sources as plaintext URL links, NEVER use markdown.
-    ALWAYS insert a line break before citing your sources.
-    """,
-  agent=writer,
-  async_execution=False,
-)
-
-get_human_issue = Task(
-  description="""ASK THE HUMAN for the issue they're facing.
-  Compile you results into a clear issue that can be used for doing research going forward""",
-  expected_output="""Clearly state the issue that the human wants you to research.\n\n
-   for example: 'HUMAN_ISSUE_FOR_RESEARCH = 'I have a battery issue with my Ledger Nano X device' """,
-  agent=topic_getter
-  
-)
-
-assist_customer =  Task(
-    description=(
-        "Answer this question from a Ledger customer seeking help with their Ledger product:'{topic}'"
-    ),
-    expected_output=
-    """
-    A SHORT answer to this question: {topic}. Your answer must be friendly and engaging but ALWAYS be 5 sentences or less. 
-    Use the provided documentation to inform your response.
-    For more information, ALWAYS cite your sources as plaintext URL links, NEVER use markdown.
-    ALWAYS insert a line break before citing your sources.
-    
-    """,
-    agent= sales_assistant,
-    async_execution=False,
-
-)
 
 
     # A SHORT answer to this question: '{topic}'. Your answer MUST be friendly and engaging but ALWAYS be 3 sentences or less. 

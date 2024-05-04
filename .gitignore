@@ -1,5 +1,8 @@
 .env
 __pychache__/
+crew_callback_logs.txt
 venvcertobot/
 pinecone_pipeline/bytebot/
 pinecone_pipeline/update_scripts/github_docs/
+pinecone_pipeline/update_scripts/md_output/
+pinecone_pipeline/update_scripts/html_output/
