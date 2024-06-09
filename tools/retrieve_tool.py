@@ -202,7 +202,8 @@ async def simple_retrieve(user_input):
 
             except Exception as e:
                 print(f'Retrieval failed: {e}')
-                return
+                contexts = "I couln't contact my Knowledge Base, please ask the question again."
+                return contexts
   
             # Format docs from Pinecone response
             learn_more_text = ('\nLearn more at')
@@ -295,10 +296,3 @@ async def simple_retrieve(user_input):
             augmented_contexts = "Today is: " + timestamp + "\n\n" + "\n\n".join(contexts)
 
     return augmented_contexts
-
-# Test suite
-# import asyncio
-# async def main():
-#     test = await retriever_tool("is Ledger recover safe?")
-#     print(test)
-# asyncio.run(main())

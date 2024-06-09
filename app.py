@@ -150,9 +150,6 @@ async def chat(chat):
 
 async def ragchat(user_id, chat_history):
 
-    # Set clock
-    timestamp = datetime.now().strftime("%B %d, %Y")
-
     res = await chat(chat_history)
 
     # Check for tool_calls in the response
@@ -165,6 +162,8 @@ async def ragchat(user_id, chat_history):
         print(f'API Query-> {function_call_query}')
 
         ##### OpenAI #####
+        # Set clock
+        #timestamp = datetime.now().strftime("%B %d, %Y")
         # retrieved_context = await simple_retrieve(function_call_query)
         # retrieved_context =  res = await agent(function_call_query)
         # troubleshoot_instructions = "CONTEXT: " + "\n" + timestamp + " ." + retrieved_context + "\n\n" + "----" + "\n\n" + "ISSUE: " + "\n" + function_call_query
