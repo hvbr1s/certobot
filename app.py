@@ -244,7 +244,7 @@ async def react_description(query: Query): # to demonstrate the UI
         print(f'Response received-> {response}')     
 
         #Clean response
-        cleaned_response = response.replace("**", "").replace("Manager", "'My Ledger'")
+        cleaned_response = response.replace("**", "")
 
         # Print for debugging
         log_entry = f"""
@@ -268,7 +268,6 @@ Final Output: {cleaned_response}
 
 # UI
 templates = Jinja2Templates(directory="templates")
-app.mount("/static", StaticFiles(directory="static"), name="./static/BBALP00A.TTF")
 @app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})

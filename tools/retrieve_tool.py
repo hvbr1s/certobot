@@ -11,9 +11,7 @@ import httpx
 main.load_dotenv()
 # Initialize Pinecone
 pinecone_key = os.environ['PINECONE_API_KEY']
-pc = Pinecone(
-    api_key=pinecone_key,
-)
+pc = Pinecone(api_key=pinecone_key)
 pc_index = pc.Index("certora")
 # Initialize Cohere
 cohere_key = os.environ["COHERE_API_KEY"]

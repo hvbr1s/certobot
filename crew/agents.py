@@ -25,7 +25,7 @@ researcher = Agent(
   memory=False,
   backstory=(
     """
-      Driven by curiosity, you're at the forefront of cybersecurity applied to blockchain and an expert in Certora products including the Prover and Gambit.
+      Driven by curiosity, you're at the forefront of cybersecurity applied to blockchain smart contracts and an expert in Certora products including the Prover and Gambit.
       
     """
   ),
