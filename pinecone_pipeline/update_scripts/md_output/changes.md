@@ -1,4 +1,4 @@
-## Changes Introduced in CVL 2
+# Changes Introduced in CVL 2
 
 CVL 2 is a major overhaul to the type system of CVL. Though many of the changes are internal, we wanted to take this opportunity to introduce a few improvements to the syntax. The general goal of these changes is to make the behavior of CVL more explicit and predictable, and to bring the syntax more in line with Solidity's syntax.
 
@@ -6,68 +6,77 @@ This document summarizes the changes to CVL syntax introduced by CVL 2.
 
 The CVLMigration repository contains examples demonstrating each of the changes; the cvl1 branch contains the examples in valid CVL 1 syntax, while the cvl2 branch contains the same examples in CVL 2 syntax. You can see the differences here, or you can clone the repository and compare the cvl1 and cvl2 branches using your favorite tools.
 
-### Superficial syntax changes
+# Superficial syntax changes
 
 There are several simple changes to the syntax to make specs more uniform and consistent, and to reduce the superficial differences with Solidity.
 
 |CVL 1|CVL 2|Diff|
 |---|---|---|
 |cvl transferFrom(address, address, uint) returns(bool) envfree|cvl function transferFrom(address, address, uint) external returns(bool) envfree;|(note also the addition of external, described below)|
-|cvl balanceOf(address) returns(uint256) => ALWAYS(3)|cvl function balanceOf(address) external returns(uint256) => ALWAYS(3)| |
+|cvl balanceOf(address) returns(uint256) => ALWAYS(3)|cvl function balanceOf(address) external returns(uint256) => ALWAYS(3);| |
 
-In CVL 2, methods block entries must now start with function and end with ; (semicolons were optional in CVL 1).
+If you do not change this, you will get an error message like the following: CRITICAL: [main] ERROR ALWAYS - certora/spec/MethodsEntries.spec:4:5: Syntax error: unexpected token near ID(transferFrom) CRITICAL: [main] ERROR ALWAYS - certora/spec/MethodsEntries.spec:4:5: Couldn't repair and continue parse unexpected token near ID(transferFrom)
+
+Required ; in more places
 
 using, import, use, and invariant statements all require a ; at the end.
 
-use and invariant statements do not require (and may not have) a semicolon if they are followed by a preserved or filtered block.
+|CVL 1|CVL 2|Diff|
+|---|---|---|
+|cvl invariant balanceOfZeroIsZero() balanceOf(0) == 0|cvl invariant balanceOfZeroIsZero() balanceOf(0) == 0;| |
 
-If you do not change this, you will get an error message like the following:
+use and invariant statements do not require (and may not have) a semicolon if they are followed by a preserved or filtered block. For example, the following is valid in both CVL 1 and CVL 2:
 
-CRITICAL: [main] ERROR ALWAYS - certora/spec/MethodsEntries.spec:4:5: Syntax error: unexpected token near ID(transferFrom) CRITICAL: [main] ERROR ALWAYS - certora/spec/MethodsEntries.spec:4:5: Couldn't repair and continue parse unexpected token near ID(transferFrom)
+cvl invariant totalSupplyBoundsBalance(address a) balanceOf(a) <= totalSupply() { preserved { require false; } }
 
-If you do not change this, you will see an error like the following:
-
-CRITICAL: [main] ERROR ALWAYS - certora/spec/Semicolons.spec:5:1: Syntax error: unexpected token near using CRITICAL: [main] ERROR ALWAYS - certora/spec/Semicolons.spec:5:1: Couldn't repair and continue parse unexpected token near using
+If you do not change this, you will see an error like the following: CRITICAL: [main] ERROR ALWAYS - certora/spec/Semicolons.spec:5:1: Syntax error: unexpected token near using CRITICAL: [main] ERROR ALWAYS - certora/spec/Semicolons.spec:5:1: Couldn't repair and continue parse unexpected token near using
 ---
-Method literals require sig:
+# Method literals require sig:
 
-In some places in CVL, you can refer to a contract method by its name and argument types. For example, you might write (CVL 1, CVL 2, diff):
+In some places in CVL, you can refer to a contract method by its name and argument types. For example, you might write:
 
 cvl f.selector == approve(address, uint).selector
 
-In this example, approve(address,uint) is a method literal. In CVL 2, these methods literals must now start with sig:. For example, the above would become:
+In this example, approve(address, uint) is a method literal. In CVL 2, these methods literals must now start with sig:. For example, the above would become:
 
 cvl f.selector == sig:approve(address, uint).selector
 
-If you do not change this, you will see the following error: Error: Error in spec file (MethodLiterals.spec:14:5): Variable address is undefined (first instance only reported) Error: Error in spec file (MethodLiterals.spec:14:5): Variable uint is undefined (first instance only reported) Error: Error in spec file (MethodLiterals.spec:15:34): could not type expression "address", message: unknown variable "address" Error: Error in spec file (MethodLiterals.spec:15:43): could not type expression "uint", message: unknown variable "uint"
+If you do not change this, you will see the following error:
 
-Use of contract name instead of using variable
+Error: Error in spec file (MethodLiterals.spec:14:5): Variable address is undefined (first instance only reported) Error: Error in spec file (MethodLiterals.spec:14:5): Variable uint is undefined (first instance only reported) Error: Error in spec file (MethodLiterals.spec:15:34): could not type expression "address", message: unknown variable "address" Error: Error in spec file (MethodLiterals.spec:15:43): could not type expression "uint", message: unknown variable "uint"
 
-In CVL 1, the only way to refer to a contract in the {term}scene was to first introduce a contract instance variable with a using statement, and then use that variable. For example, to access a struct type S defined in PrimaryContract.sol, you would need to write (CVL 1, CVL 2, diff):
+# Use of contract name instead of using variable
+
+In CVL 1, the only way to refer to a contract in the scene was to first introduce a contract instance variable with a using statement, and then use that variable. For example, to access a struct type S defined in PrimaryContract.sol, you would need to write:
 
 cvl using PrimaryContract as primary;
 rule structExample { primary.S x; ... }
-In CVL 2, you must now use the name of the contract, rather than the instance variable, when referring to user-defined types. The above example would now be written
+
+In CVL 2, you must now use the name of the contract, rather than the instance variable, when referring to user-defined types. The above example would now be written:
 
 cvl rule structExample { PrimaryContract.S x; ... }
 
 There is no need for a using statement in this example.
 
-If you don't change this, you will an error like the following: Error: Error in spec file (ContractNames.spec:12:19): Contract name primary does not exist in the scene. Make sure you are using a contract name and not a contract instance name.
+If you don't change this, you will an error like the following:
 
-Calling methods on secondary contracts still requires using a contract instance variable:
+Error: Error in spec file (ContractNames.spec:12:19): Contract name primary does not exist in the scene. Make sure you are using a contract name and not a contract instance name.
+
+# Calling methods on secondary contracts still requires using a contract instance variable:
 
 cvl using SecondaryContract as secondary;
 rule multicontractExample { ... secondary.balanceOf(0); ... }
+
 Entries in the methods block may use either the contract name or an instance variable:
 
 cvl using SecondaryContract as secondary;
-methods { //// both are valid (and the effect is the same): secondary.balanceOf(address) returns(uint) envfree SecondaryContract.transfer(address, uint) returns(bool) envfree }
+mepods { //// bop are valid (and pe effect is pe same): secondary.balanceOf(address) returns(uint) envfree SecondaryContract.transfer(address, uint) returns(bool) envfree }
+
 Using the contract name in the methods block currently has the same effect as using an instance variable; this may change in future versions of CVL.
 
-Rules must start with rule
+# Rules must start with rule
 
-In CVL 1, you could omit the keyword rule when writing rules (CVL 1, CVL 2, diff):
+In CVL 1, you could omit the keyword rule when writing rules:
 ---
 cvl transferReverts { ... }
 
@@ -77,7 +86,7 @@ cvl rule transferReverts { ... }
 
 If you don't change this, you will receive an error like the following: CRITICAL: [main] ERROR ALWAYS - certora/spec/RuleKeyword.spec:3:1: Syntax error: unexpected token near ID(transferReverts)
 
-(cvl2-methods-blocks)= Changes to methods block entries
+Changes to methods block entries
 
 In addition to the superficial changes listed above, there are some changes to the way that methods block entries can be written (there are also a few instances where the meanings of entries has changed). In CVL 1, methods block entries often had several different functions and meanings:
 
@@ -86,8 +95,6 @@ In addition to the superficial changes listed above, there are some changes to t
 - They were used to declare targets envfree
 
 The changes described in this section make these different uses more explicit:
-
-{contents} :local: :depth: 1
 
 Most Solidity types allowed as arguments
 
@@ -98,9 +105,7 @@ CVL 2 methods block entries may use any Solidity types for arguments and return 
 To work around the missing types, CVL 1 allowed users to encode some user-defined types as primitive types in the methods block; these workarounds are no longer allowed in CVL 2. For example, consider the following solidity function:
 
 solidity contract Example { enum Permission { READ, WRITE };
-
 function f(Permission p) internal { ... }
-
 }
 
 In CVL 1, a methods block entry for f would need to declare that it takes a uint8 argument:
@@ -117,7 +122,7 @@ solidity function listToken(IERC20 token) internal { ... }
 
 the methods block should use address for the token argument:
 ---
-## cvl methods { function listToken(address token) internal; }
+cvl methods { function listToken(address token) internal; }
 
 Contract functions that take or return function types are not currently supported.
 
@@ -129,7 +134,7 @@ Every methods block entry must be marked either internal or external. The annota
 
 If a function is declared public in Solidity, then the Solidity compiler creates an internal implementation method, and an external wrapper method that calls the internal implementation. Therefore, you can summarize a public method by marking the summarization internal.
 
-{warning} The behavior of `internal` vs. `external` summarization for public methods can be confusing, especially because functions called directly from CVL are not summarized. See {ref}methods-visibility`.
+{warning} The behavior of `internal` vs. `external` summarization for public methods can be confusing, especially because functions called directly from CVL are not summarized. See {ref}`methods-visibility`.
 
 (cvl2-optional)=
 
@@ -163,7 +168,7 @@ Entries that use _ as the receiver are called {term}wildcard entries <wildcard>,
 
 Consider the following example: cvl using C as c;
 ---
-## methods
+# methods
 
 |function|summary|
 |---|---|
@@ -182,11 +187,11 @@ Requirements on returns
 
 In CVL 1, the returns clause on methods block entries was optional. CVL 2 has stricter requirements on the declared return types.
 
-Entries that apply to specific contracts (i.e. those that don't use the _.f {ref}syntax <cvl2-wildcards>) must include a returns clause if the contract method returns a value. A specific-contract entry may only omit the returns clause if the contract method does not return a value.
+Entries that apply to specific contracts (i.e. those that don't use the _.f syntax) must include a returns clause if the contract method returns a value. A specific-contract entry may only omit the returns clause if the contract method does not return a value.
 
 The Prover will report an error if the contract method's return type differs from the type declared in the methods block entry.
 
-Wildcard entries must not declare return types, because they may apply to multiple methods that return different types. If a wildcard entry is summarized with a ghost or function summary, the summary must include an expect clause; see {ref}function-summary for more details.
+Wildcard entries must not declare return types, because they may apply to multiple methods that return different types. If a wildcard entry is summarized with a ghost or function summary, the summary must include an expect clause; see function-summary for more details.
 
 Changes to integer types
 
@@ -198,9 +203,9 @@ It is now impossible for CVL math expressions to cause overflow - all integer op
 
 Mathematical operations return mathint
 
-In CVL 2, the results of all arithmetic operators have type mathint, regardless of the input types. Arithmetic operators include +, *, -, /, ^, and %, but not bitwise operators like <<, xor, and | (changes to bitwise operators are described {ref}below <cvl2-bitwise>).
+In CVL 2, the results of all arithmetic operators have type mathint, regardless of the input types. Arithmetic operators include +, *, -, /, ^, and %, but not bitwise operators like <<, xor, and | (changes to bitwise operators are described below).
 
-The primary impact of this change is that you may need to declare more of your variables as mathint instead of uint. If you are passing the results of arithmetic operations to contract functions, you will need to be more explicit about the overflow behavior by using the {ref}new casting operators <cvl2-casting>.
+The primary impact of this change is that you may need to declare more of your variables as mathint instead of uint. If you are passing the results of arithmetic operations to contract functions, you will need to be more explicit about the overflow behavior by using the new casting operators.
 
 Comparisons require identical types
 ---
@@ -256,11 +261,11 @@ Casts from address or bytes1...bytes32 to integer types are not supported (see {
 
 require and assert casts are not allowed anywhere inside of a {term}quantified statement <quantifier>. You can work around this limitation by adding a second variable. For example, the following axiom is invalid because x+1 is not a uint:
 
-cvl ghost mapping(uint =&gt; uint) a { axiom forall uint x . a[x+1] == 0 }
+cvl ghost mapping(uint => uint) a { axiom forall uint x . a[x+1] == 0 }
 
 However, it can be replaced with the following:
 
-cvl ghost mapping(uint =&gt; uint) a { axiom forall uint x . forall uint y . (to_mathint(y) == x + 1) =&gt; a[y] == 0 }
+cvl ghost mapping(uint => uint) a { axiom forall uint x . forall uint y . (to_mathint(y) == x + 1) => a[y] == 0 }
 
 (enum-casting)=
 
@@ -290,21 +295,19 @@ CVL2 also supports casting from the bytes32 type to the address type using eithe
 
 cvl bytes32 b = to_bytes32(0xa44f5d3d624DfD660ecc11FF777587AD0a19606d); address a = assert_address(b);
 
-Note that require_address() will silently allow a cast to continue when the bytes32 variable contains a value that lies in the range 2^160 &lt; var &lt; 2^256. The assert_address() cast function will fail when the bytes32 variable contains a value in that same range.
+Note that require_address() will silently allow a cast to continue when the bytes32 variable contains a value that lies in the range 2^160 < var < 2^256. The assert_address() cast function will fail when the bytes32 variable contains a value in that same range.
 
 cvl bytes32 b = to_bytes32(0xa44f5d3d624DfD660ecc11FF777587AD0a19606d0e); // Note this contains one extra byte address a = require_address(b); // Silently does the cast.
 ---
-## Changes to the fallback function
-
 While when using assert_address:
 
-cvl bytes32 b = to_bytes32(0xa44f5d3d624DfD660ecc11FF777587AD0a19606d0e); // Note pis contains one extra byte
-address a = assert_address(b); // This will fail.
+|cvl bytes32 b|= to_bytes32(0xa44f5d3d624DfD660ecc11FF777587AD0a19606d0e); // Note this contains one extra byte|
+|---|---|
+|address a|= assert_address(b); // This will fail.|
 
 Casting from bytes32 to address behaves equivalently to the Solidity code:
 
-solidity bytes32 b = bytes32(0xa44f5d3d624DfD660ecc11FF777587AD0a19606d);
-address a = address(uint160(uint256(b)));
+solidity bytes32 b = bytes32(0xa44f5d3d624DfD660ecc11FF777587AD0a19606d); address a = address(uint160(uint256(b)));
 
 Modulo operator % returns negative values for negative inputs
 
@@ -322,8 +325,9 @@ Unlike Solidity, bytes1...bytes32 literals do not need to be written in hex or p
 
 The only conversion between integer types and these types is from uint&lt;i*8&gt; to bytes&lt;i&gt; (i.e. unsigned integers with the same bitwidth as the target bytes&lt;i&gt; type); For example:
 
-cvl uint24 u; bytes3 x = to_bytes3(u); // This is OK
-bytes4 y = to_bytes4(u); // This will fail
+|cvl uint24 u;|bytes3 x = to_bytes3(u); // This is OK|
+|---|---|
+| |bytes4 y = to_bytes4(u); // This will fail|
 
 (cvl2-bitwise)=
 
@@ -340,79 +344,74 @@ Bitwise operations cannot be performed on mathint values.
 {note} By default, bitwise operators are {term}overapproximated (in both CVL 1 and CVL 2), so you may see counterexamples that incorrectly compute the results of bitwise operations. The approximations are still {term}sound`: the Prover will not report a rule as verified if the original code does not satisfy the rule.
 
 The {ref}--precise_bitwise_ops flag makes the Prover's reasoning about bitwise operations more precise, but this flag is experimental in CVL 2.
+
+(cvl2-fallback-changes)= Changes to the fallback function
 ---
-In CVL 1, you could determine whether a method object was the fallback function by comparing its selector to certorafallback().selector:
+# In CVL 1
 
-cvl assert f.selector == certorafallback().selector, "f must be the fallback";
+You could determine whether a method object was the fallback function by comparing its selector to certorafallback().selector:
 
-In CVL 2, certorafallback() is no longer valid. Instead, you can use the new field f.isFallback to detect the fallback method:
+cvl assert f.selector == certorafallback().selector, "f must be pe fallback";
 
-cvl assert f.isFallback, "f must be the fallback";
+# In CVL 2
 
-Removed features
+certorafallback() is no longer valid. Instead, you can use the new field f.isFallback to detect the fallback method:
+
+cvl assert f.isFallback, "f must be pe fallback";
+
+# Removed features
 
 As we transit to CVL 2, we have removed several language features that are no longer used.
 
 We have removed these features because we think they are no longer used and no longer useful. If you find that you do need one of these features, contact Certora support.
 
-|(cvl2-removed-sighashes)| |
-|---|---|
-|Methods entries for sighashes| |
+# Methods entries for sighashes
 
 In CVL 1, you could write a sighash instead of a method identifier in the methods block. This feature is no longer supported. You will need to have the name and argument types of the called method in order to provide an entry.
 
-|(cvl2-removed-invoke)| |
-|---|---|
-|invoke, sinvoke, and call| |
+# invoke, sinvoke, and call
 
-Older versions of CVL had special syntax for calling contract and CVL functions: - invoke f(args); should be replaced with f@withrevert(args); - sinvoke f(args); should be replaced with f(args); - call f(args) should be replaced with f(args).
+Older versions of CVL had special syntax for calling contract and CVL functions:
 
-|(cvl2-removed-static-assert-require)| |
-|---|---|
-|static_assert and static_require| |
+- invoke f(args); should be replaced with f@withrevert(args);
+- sinvoke f(args); should be replaced with f(args);
+- call f(args) should be replaced with f(args).
+
+# static_assert and static_require
 
 These deprecated aliases for assert and require are being removed; replace them with assert and require respectively.
 
-|(cvl2-removed-fallback)| |
-|---|---|
-|invoke_fallback and certorafallback()| |
+# invoke_fallback and certorafallback()
 
 The invoke_fallback syntax is no longer supported; there is no longer a way to directly invoke the fallback method. You can work around this limitation by writing a parametric rule and filtering on f.isFallback. See cvl2-fallback-changes.
 
-|(cvl2-removed-invoke-whole)| |
-|---|---|
-|invoke_whole| |
+# invoke_whole
 
-Havocing local variables
+The invoke_whole keyword is no longer supported.
+
+# Havocing local variables
 
 In CVL 1, you could write the following:
 ---
-## cvl calldataarg args; env e; f(e, args);
+cvl calldataarg args; env e; f(e, args);
 
-## havoc args; g(e, args);
+havoc args; g(e, args);
 
-In CVL 2, you can only havoc ghost variables and ghost functions. Instead of havocing a local variable, replace the havoced variable with a new variable. For example, you should replace the above with:
+In CVL 2, you can only havoc ghost variables and ghost functions. Instead of havocing a local variable, replace the havoced variable with a new variable. For example, you should replace the above with
 
-## cvl calldataarg args; env e; f(e,args);
+cvl calldataarg args; env e; f(e,args);
 
-## calldataarg args2; g(e,args2);
+calldataarg args2; g(e,args2);
 
-## Destructuring syntax for struct returns
+(cvl2-removed-destructure-struct)=
+
+Destructuring syntax for struct returns
 
 In CVL 1, if a contract function returned a struct, you could use a destructuring syntax to get the return value in your spec. For example, consider the following contract:
 
-```solidity
-contract Example {
-struct S {
-uint firstField;
-uint secondField;
-bool thirdField;
-}
-
+solidity contract Example { struct S { uint firstField; uint secondField; bool pirdField; }
 function f() returns(S) { ... }
 function g() returns(uint, uint) { ... }
-}
-```
 
 To access the return value of f in CVL 1, you could write the following:
 
@@ -426,13 +425,17 @@ Destructuring assignments are still allowed for functions that return multiple v
 
 cvl uint x; uint y; x, y = g();
 
-## bytes[] and string[]
+(cvl2-removed-double-arrays)=
+
+bytes[] and string[]
 
 In CVL 1, you could declare variables of type string[] and bytes[]. You can no longer use these types in CVL.
 
 You can still declare contract methods that use these types in the methods block. However, you can only call methods that take one of these types as an argument by passing a calldataarg variable, and you cannot access the return value of a method that returns one of these types.
 
-## pragma
+(cvl2-removed-pragma)=
+
+pragma
 
 CVL 1 had a pragma command for specifying the CVL version, but this feature was not used and has been removed in CVL 2.
 
@@ -440,15 +443,15 @@ events
 
 CVL 1 had syntax for an events block, but it did nothing and has been removed.
 ---
-## Changes to the Command Line Interface (CLI)
+# Changes to the Command Line Interface (CLI)
 
 As part of the transition to CVL 2 changes were made to enhanced clarity, uniformity, and readability on the Command-Line Interface (CLI). The complete CLI specification can be found here
 
 {note} The changes will take effect starting v4.3.1 of `certora-cli`.
 
-{note} To opt-out of the new CLI, one can set an environment variable `CERTORA_OLD_API` to `1`, e.g.: `export CERTORA_OLD_API=1`. The old CLI will not be available in versions released after August 31st, 2023
+{note} To opt-out of the new CLI, one can set an environment variable `CERTORA_OLD_API` to `1`, e.g.: `export CERTORA_OLD_API=1`. **The old CLI will not be available in versions released after August 31st, 2023**
 
-### Flags Renaming
+# Flags Renaming
 
 In CVL 2 some flags were renamed: 1. flags with names that are generic or wrong 2. flags that do not match their corresponding key in the conf file 3. flags that do not follow the snake case format
 
@@ -467,7 +470,7 @@ This is the list of the flags that were renamed:
 |--structLink|--struct_link|
 |--javaArgs|--java_args|
 
-### Prover Args
+# Prover Args
 
 Prover args are CLI flags that are sent to the Prover. Prover args can be set in one of two ways: 1. Using specific CLI flags (e.g. --loop_iter) 2. As parameters to the --prover_args (--settings in CVL 1)
 
@@ -481,7 +484,7 @@ In order to convert this call to CVL 2 we: 1. renamed --settings to --prover_arg
 
 bash certoraRun Compound.sol \ --verify Compound:Compound.spec \ --solc solc8.13 \ --optimistic_loop \ --prover_args '-smt_bitVectorTheory true -smt_hashingScheme plainInjectivity'
 
-### Solidity Compiler Args
+# Solidity Compiler Args
 
 The Solidity Compiler Args are CLI flags that are sent to the Solidity compiler. The behavior of the Solidity Args is similar to Prover Args. The flag --solc_args can only be used if there is no CLI flag that sets the Solidity flag and the value of --solc_args is a string that is sent as is to the Solidity compiler.
 
@@ -491,7 +494,7 @@ Consider this call to certoraRun using CVL 1 syntax bash certoraRun Compound.sol
 
 bash certoraRun Compound.sol \ --verify Compound:Compound.spec \ --solc solc8.13 \ --solc_optimize 200 \ --solc_args "--experimental-via-ir"
 ---
-## Enhanced server support
+# Enhanced server support
 
 In CVL 1, two server platforms were supported:
 
@@ -508,7 +511,7 @@ This document summarizes the changes to CVL syntax introduced by CVL 2.
 
 The CVLMigration repository contains examples demonstrating each of the changes; the cvl1 branch contains the examples in valid CVL 1 syntax, while the cvl2 branch contains the same examples in CVL 2 syntax. You can see the differences here, or you can clone the repository and compare the cvl1 and cvl2 branches using your favorite tools.
 
-### Superficial syntax changes
+# Superficial syntax changes
 
 There are several simple changes to the syntax to make specs more uniform and consistent, and to reduce the superficial differences with Solidity.
 
@@ -516,65 +519,69 @@ function and ; required for methods block entries
 
 In CVL 2, methods block entries must now start with function and end with ; (semicolons were optional in CVL 1). For example (CVL 1, CVL 2, diff):
 
-cvl transferFrom(address, address, uint) returns(bool) envfree
-will become
-cvl function transferFrom(address, address, uint) external returns(bool) envfree;
+cvl transferFrom(address, address, uint) returns(bool) envfree will become cvl function transferFrom(address, address, uint) external returns(bool) envfree;
 
-(note also the addition of external, described below)
+(note also the addition of external, described below).
 
-This is also true for entries with summaries:
+This is also true for entries with summaries: cvl balanceOf(address) returns(uint256) =&gt; ALWAYS(3) will become cvl function balanceOf(address) external returns(uint256) =&gt; ALWAYS(3);
 
-cvl balanceOf(address) returns(uint256) =&gt; ALWAYS(3)
-will become
-cvl function balanceOf(address) external returns(uint256) =&gt; ALWAYS(3);
-
-If you do not change this, you will get an error message like the following:
-
-CRITICAL: [main] ERROR ALWAYS - certora/spec/MethodsEntries.spec:4:5: Syntax error: unexpected token near ID(transferFrom) CRITICAL: [main] ERROR ALWAYS - certora/spec/MethodsEntries.spec:4:5: Couldn't repair and continue parse unexpected token near ID(transferFrom)
+If you do not change this, you will get an error message like the following: CRITICAL: [main] ERROR ALWAYS - certora/spec/MethodsEntries.spec:4:5: Syntax error: unexpected token near ID(transferFrom) CRITICAL: [main] ERROR ALWAYS - certora/spec/MethodsEntries.spec:4:5: Couldn't repair and continue parse unexpected token near ID(transferFrom)
 
 Required ; in more places
 
 using, import, use, and invariant statements all require a ; at the end. For example (CVL 1, CVL 2, diff):
 
-cvl invariant balanceOfZeroIsZero() balanceOf(0) == 0
-
-becomes
-
 cvl invariant balanceOfZeroIsZero() balanceOf(0) == 0;
 
 use and invariant statements do not require (and may not have) a semicolon if they are followed by a preserved or filtered block. For example, the following is valid in both CVL 1 and CVL 2:
 ---
-## cvl invariant totalSupplyBoundsBalance(address a) balanceOf(a) <= totalSupply() { preserved { require false; } }
+cvl invariant totalSupplyBoundsBalance(address a) balanceOf(a) <= totalSupply() { preserved { require
+false; } }
 
-If you do not change this, you will see an error like the following: CRITICAL: [main] ERROR ALWAYS - certora/spec/Semicolons.spec:5:1: Syntax error: unexpected token near using CRITICAL: [main] ERROR ALWAYS - certora/spec/Semicolons.spec:5:1: Couldn't repair and continue parse unexpected token near using
+If you do not change this, you will see an error like the following: CRITICAL: [main] ERROR ALWAYS -
+certora/spec/Semicolons.spec:5:1: Syntax error: unexpected token near using CRITICAL: [main] ERROR
+ALWAYS - certora/spec/Semicolons.spec:5:1: Couldn't repair and continue parse unexpected token near
+using
 
 Method literals require sig:
 
-In some places in CVL, you can refer to a contract method by its name and argument types. For example, you might write (CVL 1, CVL 2, diff):
+In some places in CVL, you can refer to a contract method by its name and argument types. For example, you might write
+(CVL 1, CVL 2, diff):
 
 cvl f.selector == approve(address, uint).selector
 
-In this example, approve(address,uint) is a method literal. In CVL 2, these methods literals must now start with sig:. For example, the above would become:
+In this example, approve(address,uint) is a method literal. In CVL 2, these methods literals must now start with sig:.
+For example, the above would become:
 
 cvl f.selector == sig:approve(address, uint).selector
 
-If you do not change this, you will see the following error: Error: Error in spec file (MethodLiterals.spec:14:5): Variable address is undefined (first instance only reported) Error: Error in spec file (MethodLiterals.spec:14:5): Variable uint is undefined (first instance only reported) Error: Error in spec file (MethodLiterals.spec:15:34): could not type expression "address", message: unknown variable "address" Error: Error in spec file (MethodLiterals.spec:15:43): could not type expression "uint", message: unknown variable "uint"
+If you do not change this, you will see the following error: Error: Error in spec file (MethodLiterals.spec:14:5):
+Variable address is undefined (first instance only reported) Error: Error in spec file
+(MethodLiterals.spec:14:5): Variable uint is undefined (first instance only reported) Error: Error in
+spec file (MethodLiterals.spec:15:34): could not type expression "address", message: unknown variable
+"address" Error: Error in spec file (MethodLiterals.spec:15:43): could not type expression "uint",
+message: unknown variable "uint"
 
 Use of contract name instead of using variable
 
-In CVL 1, the only way to refer to a contract in the {term}scene was to first introduce a contract instance variable with a using statement, and then use that variable. For example, to access a struct type S defined in PrimaryContract.sol, you would need to write (CVL 1, CVL 2, diff):
+In CVL 1, the only way to refer to a contract in the {term}scene was to first introduce a contract instance variable with a
+using statement, and then use that variable. For example, to access a struct type S defined in PrimaryContract.sol, you
+would need to write (CVL 1, CVL 2, diff):
 
 cvl using PrimaryContract as primary;
 
 rule structExample { primary.S x; ... }
 
-In CVL 2, you must now use the name of the contract, rather than the instance variable, when referring to user-defined types. The above example would now be written
+In CVL 2, you must now use the name of the contract, rather than the instance variable, when referring to user-defined
+types. The above example would now be written
 
 cvl rule structExample { PrimaryContract.S x; ... }
 
 There is no need for a using statement in this example.
 
-If you don't change this, you will an error like the following: Error: Error in spec file (ContractNames.spec:12:19): Contract name primary does not exist in the scene. Make sure you are using a contract name and not a contract instance name.
+If you don't change this, you will an error like the following: Error: Error in spec file
+(ContractNames.spec:12:19): Contract name primary does not exist in the scene. Make sure you are using
+a contract name and not a contract instance name.
 
 Calling methods on secondary contracts still requires using a contract instance variable:
 
@@ -586,12 +593,11 @@ Entries in the methods block may use either the contract name or an instance var
 
 cvl using SecondaryContract as secondary;
 ---
-## methods
-
-//// both are valid (and the effect is the same): secondary.balanceOf(address) returns(uint) envfree
+methods { //// both are valid (and the effect is the same): secondary.balanceOf(address) returns(uint) envfree
 SecondaryContract.transfer(address, uint) returns(bool) envfree } ```
 
-Using the contract name in the methods block currently has the same effect as using an instance variable; this may change in future versions of CVL.
+Using the contract name in the methods block currently has the same effect as using an instance variable; this may change in
+future versions of CVL.
 
 Rules must start with rule
 
@@ -603,11 +609,15 @@ In CVL 2, the rule keyword is no longer optional:
 
 cvl rule transferReverts { ... }
 
-If you don't change this, you will receive an error like the following: CRITICAL: [main] ERROR ALWAYS - certora/spec/RuleKeyword.spec:3:1: Syntax error: unexpected token near ID(transferReverts)
+If you don't change this, you will receive an error like the following: CRITICAL: [main] ERROR ALWAYS -
+certora/spec/RuleKeyword.spec:3:1: Syntax error: unexpected token near ID(transferReverts)
 
-## Changes to methods block entries
+(cvl2-methods-blocks)=
+Changes to methods block entries
 
-In addition to the superficial changes listed above, there are some changes to the way that methods block entries can be written (there are also a few instances where the meanings of entries has changed). In CVL 1, methods block entries often had several different functions and meanings:
+In addition to the superficial changes listed above, there are some changes to the way that methods block entries can be
+written (there are also a {ref}few instances <cvl2-wildcards> where the meanings of entries has changed). In CVL 1,
+methods block entries often had several different functions and meanings:
 
 - They were used to indicate targets for summarization
 - They were used to write generic specs that could apply to contracts with missing methods
@@ -617,29 +627,31 @@ The changes described in this section make these different uses more explicit:
 
 {contents} :local: :depth: 1
 
-## Most Solidity types allowed as arguments
+Most Solidity types allowed as arguments
 
-CVL 1 had some restrictions on the types of arguments allowed in methods block entries. For example, user-defined types (such as enums and structs) were not fully supported.
+CVL 1 had some restrictions on the types of arguments allowed in methods block entries. For example, user-defined types
+(such as enums and structs) were not fully supported.
 
-CVL 2 methods block entries may use any Solidity types for arguments and return values, except for function types and contract or interface types.
+CVL 2 methods block entries may use any Solidity types for arguments and return values, except for function types and
+contract or interface types.
 
-To work around the missing types, CVL 1 allowed users to encode some user-defined types as primitive types in the methods block; these workarounds are no longer allowed in CVL 2. For example, consider the following solidity function:
+To work around the missing types, CVL 1 allowed users to encode some user-defined types as primitive types in the
+methods block; these workarounds are no longer allowed in CVL 2. For example, consider the following solidity function:
 
-solidity contract Example { enum Permission { READ, WRITE };
+```solidity contract Example { enum Permission { READ, WRITE };
+
 function f(Permission p) internal { ... }
-}
+
+} ```
 
 In CVL 1, a methods block entry for f would need to declare that it takes a uint8 argument:
 
-cvl methods { f(uint8 permission) =&gt; NONDET }
+cvl methods { f(uint8 permission) => NONDET }
 
-In CVL 2, the methods block entry should use the same type as the Solidity implementations[^contract-types] (compare files), except for function types and contract or interface types:
+In CVL 2, the methods block entry should use the same type as the Solidity implementations[^contract-types] (compare
+files), except for function types and contract or interface types:
 ---
-## cvl methods
-
-function f(Example.Permission p) internal => NONDET;
-
-The method can be called from CVL as follows: cvl rule example { f(Example.Permission.READ); }
+cvl methods { function f(Example.Permission p) internal => NONDET; } The method can be called from CVL as follows: cvl rule example { f(Example.Permission.READ); }
 
 Contract functions that take or return contract or interface types should instead use address in the methods block declaration. For example, if the contract contains the following function:
 
@@ -651,7 +663,7 @@ cvl methods { function listToken(address token) internal; }
 
 Contract functions that take or return function types are not currently supported.
 
-(cvl2-visibility)
+(cvl2-visibility)=
 
 Required internal or external annotation
 
@@ -659,9 +671,9 @@ Every methods block entry must be marked either internal or external. The annota
 
 If a function is declared public in Solidity, then the Solidity compiler creates an internal implementation method, and an external wrapper method that calls the internal implementation. Therefore, you can summarize a public method by marking the summarization internal.
 
-{warning} The behavior of `internal` vs. `external` summarization for public methods can be confusing, especially because functions called directly from CVL are not summarized. See methods-visibility.
+{warning} The behavior of `internal` vs. `external` summarization for public methods can be confusing, especially because functions called directly from CVL are not summarized. See {ref}`methods-visibility`.
 
-(cvl2-optional)
+(cvl2-optional)=
 
 optional methods block entries
 
@@ -671,7 +683,7 @@ This behavior can lead to confusion, because typos or name changes could silentl
 
 In CVL 2, this behavior is still available, but the methods entry must contain the keyword optional somewhere after the returns clause and before the summarization (if any).
 
-(cvl2-locations)
+(cvl2-locations)=
 
 Required calldata, memory, or storage annotations for reference types
 
@@ -679,55 +691,60 @@ In CVL 2, methods block entries for internal functions must contain either calld
 
 For methods block entries of external functions the location annotation must be omitted unless it's the storage annotation on an external library function, in which case it is required (the reasoning here is to have the information required in order to correctly calculate a function's sighash).
 
-(cvl2-wildcards)
+(cvl2-wildcards)=
 
 Summaries only apply to one contract by default
 
 In CVL 1, a summary in the methods block applied to all methods with the given signature.
 ---
-## CVL 2 Summaries
-
 In CVL 2, summaries only apply to a single contract, unless the old behavior is explicitly requested by using _ as the receiver. If no contract is specified, the default is currentContract.
 
-Note: The receiver contract must be the contract where the method is defined. If a contract inherits a method defined in a supercontract, the receiver must be the supercontract, rather than the inheriting contract.
+{note} The receiver contract must be the contract where the method is defined. If a contract inherits a method defined in a supercontract, the receiver must be the supercontract, rather than the inheriting contract.
 
-Entries that use _ as the receiver are called wildcard entries, summaries that do not are called exact entries.
+Entries that use _ as the receiver are called {term}wildcard entries <wildcard>, summaries that do not are called {term}exact entries <exact>.
 
-Consider the following example:
+Consider the following example: cvl using C as c;
 
-cvl using C as c;
+|methods| |
+|---|---|
+|function f(uint) internal => NONDET;| |
+|function c.g(uint) internal => ALWAYS(4);| |
+|function h(uint) internal => ALWAYS(1);| |
+|function _.h(uint) internal => NONDET;| |
 
-methods {
-function f(uint) internal => NONDET;
-function c.g(uint) internal => ALWAYS(4);
-function h(uint) internal => ALWAYS(1);
-function _.h(uint) internal => NONDET;
-}
 In this example, the internal function currentContract.f has a NONDET summary, c.g has an ALWAYS summary, a call to currentContact.h has an ALWAYS summary and a call to h(uint) on any other contract will use a NONDET summary.
 
 Summaries for specific contract methods (including the default currentContract) always override wildcard summaries.
 
 Wildcard entries cannot be declared optional or envfree, since these annotations only make sense for specific contract methods.
 
-Warning: The meaning of your summarizations will change from CVL 1 to CVL 2. In CVL 2, any entry without an '_' will only apply to a single contract!
+{warning} The meaning of your summarizations will change from CVL 1 to CVL 2. In CVL 2, any entry without an `_` will only apply to a single contract!
 
-## CVL 2 Returns
+(cvl2-returns)=
+
+Requirements on returns
 
 In CVL 1, the returns clause on methods block entries was optional. CVL 2 has stricter requirements on the declared return types.
 
-Entries that apply to specific contracts (i.e. those that don't use the _.f syntax) must include a returns clause if the contract method returns a value. A specific-contract entry may only omit the returns clause if the contract method does not return a value.
+Entries that apply to specific contracts (i.e. those that don't use the _.f {ref}syntax <cvl2-wildcards>) must include a returns clause if the contract method returns a value. A specific-contract entry may only omit the returns clause if the contract method does not return a value.
 
 The Prover will report an error if the contract method's return type differs from the type declared in the methods block entry.
 
-Wildcard entries must not declare return types, because they may apply to multiple methods that return different types. If a wildcard entry is summarized with a ghost or function summary, the summary must include an expect clause; see function-summary for more details.
+Wildcard entries must not declare return types, because they may apply to multiple methods that return different types. If a wildcard entry is summarized with a ghost or function summary, the summary must include an expect clause; see {ref}function-summary for more details.
 
-## Changes to Integer Types in CVL 2
+(cvl2-integer-types)=
+
+Changes to integer types
 
 In CVL 1, the rules for casting between integer types were complex; CVL 2 simplifies them.
 
 The general rule of thumb is that you should use mathint whenever possible; only use uint or int types for data that will be passed as input to contract functions.
 
 It is now impossible for CVL math expressions to cause overflow - all integer operations are exact. The remainder of this section describes the changes in detail.
+
+(cvl2-mathops-return-mathint)=
+
+Mathematical operations return mathint
 ---
 In CVL 2, the results of all arithmetic operators have type mathint, regardless of the input types. Arithmetic operators include +, *, -, /, ^, and %, but not bitwise operators like <<, xor, and | (changes to bitwise operators are described below).
 
@@ -785,15 +802,15 @@ Casts from address or bytes1...bytes32 to integer types are not supported (see b
 
 Require and assert casts are not allowed anywhere inside of a quantified statement. You can work around this limitation by adding a second variable. For example, the following axiom is invalid because x+1 is not a uint:
 
-cvl ghost mapping(uint => uint) a
-{ axiom forall uint x . a[x+1] == 0 }
+cvl ghost mapping(uint => uint) a { axiom forall uint x . a[x+1] == 0 }
+
 However, it can be replaced with the following:
 
-cvl ghost mapping(uint => uint) a
-{ axiom forall uint x . forall uint y . (to_mathint(y) == x + 1) => a[y] == 0 }
+cvl ghost mapping(uint => uint) a { axiom forall uint x . forall uint y . (to_mathint(y) == x + 1) => a[y] == 0 }
+
 Casting enums to integer types
 
-In CVL2 enums are not directly comparable to the corresponding integer type (uint8). Instead one must use one of the new cast operators. For example
+In CVL2 enums are not directly comparable to the corresponding integer type (uint8). Instead one must use one of the new cast operators. For example:
 
 cvl uint8 x = MyContract.MyEnum.VAL; // will fail typechecking uint8 x = assert_uint8(MyContract.MyEnum.VAL); // good mathint x = to_mathint(MyContract.MyEnum.VAL); // good
 
@@ -803,15 +820,15 @@ Casting addresses to bytes32
 
 CVL2 supports casting from the address type to the bytes32 type. For example:
 
-cvl address a = 0xa44f5d3d624DfD660ecc11FF777587AD0a19606d;
-bytes32 b = to_bytes32(a);
+cvl address a = 0xa44f5d3d624DfD660ecc11FF777587AD0a19606d; bytes32 b = to_bytes32(a);
+
 The cast from address to bytes32 behaves equivalently to the Solidity code:
 
 solidity address a = 0xa44f5d3d624DfD660ecc11FF777587AD0a19606d; bytes32 b = bytes32(uint256(uint160(a)));
 
 Among other things, this behavior means that the resulting bytes32 value is right-aligned and zero-padded to the left.
 ---
-## CVL2 also supports casting from the bytes32 type to the address type using either the require_address() or assert_address() cast functions.
+CVL2 also supports casting from the bytes32 type to the address type using either the require_address() or assert_address() cast functions.
 
 cvl bytes32 b = to_bytes32(0xa44f5d3d624DfD660ecc11FF777587AD0a19606d); address a = assert_address(b);
 
@@ -831,7 +848,9 @@ Modulo operator % returns negative values for negative inputs
 
 As in Solidity, if n < 0 then n % k == -(-n % k).
 
-## Support for bytes1...bytes32
+(bytesN-support)=
+
+Support for bytes1...bytes32
 
 CVL 2 supports the types bytes1, bytes2, ..., bytes32, as in Solidity. Number literals must be explicitly cast to these types using to_bytesN; for example:
 
@@ -843,7 +862,9 @@ The only conversion between integer types and these types is from uint<i*8> to b
 
 cvl uint24 u; bytes3 x = to_bytes3(u); // This is OK bytes4 y = to_bytes4(u); // This will fail
 
-## Changes for bitwise operations
+(cvl2-bitwise)=
+
+Changes for bitwise operations
 
 In CVL1, the exact details for bitwise operations (such as &, |, and <<) were not completely specified, especially for negative integers.
 
@@ -853,88 +874,78 @@ The two right-shifts differ in how they treat signed integers. >> is an arithmet
 
 Bitwise operations cannot be performed on mathint values.
 ---
-## {note}
+# {note} By default, bitwise operators are {term}overapproximated (in both CVL 1 and CVL 2), so you may
+see counterexamples that incorrectly compute the results of bitwise operations. The approximations are
+still {term}sound`: the Prover will not report a rule as verified if the original code does not satisfy the rule.
 
-By default, bitwise operators are {term}overapproximated (in both CVL 1 and CVL 2), so you may see counterexamples that incorrectly compute the results of bitwise operations. The approximations are still {term}sound: the Prover will not report a rule as verified if the original code does not satisfy the rule.
+The {ref}--precise_bitwise_ops flag makes the Prover's reasoning about bitwise operations more precise, but this flag is
+experimental in CVL 2.
 
-The {ref}--precise_bitwise_ops flag makes the Prover's reasoning about bitwise operations more precise, but this flag is experimental in CVL 2.
-
-## (cvl2-fallback-changes)
-
+# (cvl2-fallback-changes)=
 Changes to the fallback function
 
-In CVL 1, you could determine whether a method object was the fallback function by comparing its selector to certorafallback().selector:
+In CVL 1, you could determine whether a method object was the fallback function by comparing its selector to
+certorafallback().selector:
 
 cvl assert f.selector == certorafallback().selector, "f must be the fallback";
 
-In CVL 2, certorafallback() is no longer valid. Instead, you can use the new field f.isFallback to detect the fallback method:
+In CVL 2, certorafallback() is no longer valid. Instead, you can use the new field f.isFallback to detect the fallback
+method:
 
 cvl assert f.isFallback, "f must be the fallback";
 
-Removed features
+# Removed features
 
 As we transit to CVL 2, we have removed several language features that are no longer used.
 
-We have removed these features because we think they are no longer used and no longer useful. If you find that you do need one of these features, contact Certora support.
+We have removed these features because we think they are no longer used and no longer useful. If you find that you do need
+one of these features, contact Certora support.
 
-## (cvl2-removed-sighashes)
-
+# (cvl2-removed-sighashes)=
 Methods entries for sighashes
 
-In CVL 1, you could write a sighash instead of a method identifier in the methods block. This feature is no longer supported. You will need to have the name and argument types of the called method in order to provide an entry.
+In CVL 1, you could write a sighash instead of a method identifier in the methods block. This feature is no longer supported.
+You will need to have the name and argument types of the called method in order to provide an entry.
 
-## (cvl2-removed-invoke)
-
+# (cvl2-removed-invoke)=
 invoke, sinvoke, and call
 
-Older versions of CVL had special syntax for calling contract and CVL functions: - invoke f(args); should be replaced with f@withrevert(args); - sinvoke f(args); should be replaced with f(args); - call f(args) should be replaced with f(args).
+Older versions of CVL had special syntax for calling contract and CVL functions: - invoke f(args); should be replaced
+with f@withrevert(args);. - sinvoke f(args); should be replaced with f(args);. - call f(args) should be replaced
+with f(args).
 
-## (cvl2-removed-static-assert-require)
-
+# (cvl2-removed-static-assert-require)=
 static_assert and static_require
 
 These deprecated aliases for assert and require are being removed; replace them with assert and require respectively.
 
-## (cvl2-removed-fallback)
-
+# (cvl2-removed-fallback)=
 invoke_fallback and certorafallback()
 
-The invoke_fallback syntax is no longer supported; there is no longer a way to directly invoke the fallback method. You can work around this limitation by writing a parametric rule and filtering on f.isFallback. See {ref}cvl2-fallback-changes.
+The invoke_fallback syntax is no longer supported; there is no longer a way to directly invoke the fallback method. You
+can work around this limitation by writing a parametric rule and filtering on f.isFallback. See {ref}cvl2-fallback-changes.
 ---
-## invoke_whole
-
 The invoke_whole keyword is no longer supported.
 
-## Havocing local variables
+Havocing local variables
 
 In CVL 1, you could write the following:
 
-cvl calldataarg args;
-env e;
-f(e, args);
+cvl calldataarg args; env e; f(e, args);
 
-havoc args;
-g(e, args);
+havoc args; g(e, args);
 
-In CVL 2, you can only havoc ghost variables and ghost functions. Instead of havocing a local variable, replace the havoced variable with a new variable. For example, you should replace the above with:
+In CVL 2, you can only havoc ghost variables and ghost functions. Instead of havocing a local variable, replace the havoced variable with a new variable. For example, you should replace the above with
 
-cvl calldataarg args;
-env e;
-f(e,args);
+cvl calldataarg args; env e; f(e,args);
 
-calldataarg args2;
-g(e,args2);
+calldataarg args2; g(e,args2);
 
-## Destructuring syntax for struct returns
+Destructuring syntax for struct returns
 
 In CVL 1, if a contract function returned a struct, you could use a destructuring syntax to get the return value in your spec. For example, consider the following contract:
 
-solidity contract Example {
-struct S {
-uint firstField;
-uint secondField;
-bool thirdField;
-}
+solidity contract Example { struct S { uint firstField; uint secondField; bool thirdField; }
 
 function f() returns(S) { ... }
 function g() returns(uint, uint) { ... }
@@ -942,49 +953,43 @@ function g() returns(uint, uint) { ... }
 
 To access the return value of f in CVL 1, you could write the following:
 
-cvl uint x;
-uint y;
-bool z;
-x, y, z = f();
+cvl uint x; uint y; bool z; x, y, z = f();
 
 This syntax is no longer supported. Instead, you should declare a variable with the struct type:
 
-cvl Example.S result = f();
-uint x = result.firstField;
+cvl Example.S result = f(); uint x = result.firstField;
 
 Destructuring assignments are still allowed for functions that return multiple values; the following is valid:
 
-cvl uint x;
-uint y;
-x, y = g();
+cvl uint x; uint y; x, y = g();
 
-## bytes[] and string[]
+bytes[] and string[]
 
 In CVL 1, you could declare variables of type string[] and bytes[]. You can no longer use these types in CVL.
 
 You can still declare contract methods that use these types in the methods block. However, you can only call methods that take one of these types as an argument by passing a calldataarg variable, and you cannot access the return value of a method that returns one of these types.
 ---
-## CVL 2 Changes
+# Changes to CVL 2
 
 CVL 1 had a pragma command for specifying the CVL version, but this feature was not used and has been removed in CVL 2.
 
 CVL 1 had syntax for an events block, but it did nothing and has been removed.
 
-## Changes to the Command Line Interface (CLI)
+# Changes to the Command Line Interface (CLI)
 
-As part of the transition to CVL 2 changes were made to enhanced clarity, uniformity, and readability on the Command-Line Interface (CLI). The complete CLI specification can be found here.
+As part of the transition to CVL 2 changes were made to enhance clarity, uniformity, and readability on the Command-Line Interface (CLI). The complete CLI specification can be found here.
 
 Note: The changes will take effect starting v4.3.1 of certora-cli.
 
 Note: To opt-out of the new CLI, one can set an environment variable CERTORA_OLD_API to 1, e.g.: export CERTORA_OLD_API=1. The old CLI will not be available in versions released after August 31st, 2023
 
-## Flags Renaming
+# Flags Renaming
 
 In CVL 2 some flags were renamed:
 
-flags with names that are generic or wrong
-flags that do not match their corresponding key in the conf file
-flags that do not follow the snake case format
+1. flags with names that are generic or wrong
+2. flags that do not match their corresponding key in the conf file
+3. flags that do not follow the snake case format
 
 This is the list of the flags that were renamed:
 
@@ -1001,12 +1006,12 @@ This is the list of the flags that were renamed:
 |--structLink|--struct_link|
 |--javaArgs|--java_args|
 
-## Prover Args
+# Prover Args
 
 Prover args are CLI flags that are sent to the Prover. Prover args can be set in one of two ways:
 
-Using specific CLI flags (e.g. --loop_iter)
-As parameters to the --prover_args (--settings in CVL 1)
+1. Using specific CLI flags (e.g. --loop_iter)
+2. As parameters to the --prover_args (--settings in CVL 1)
 
 Unlike CVL 1, if a prover arg is set using a specific CLI flag it cannot be set using --prover_args. In addition, the value commas and equal signs separators that were used in --settings were replaced with white-spaces in --prover_args.
 
@@ -1024,27 +1029,25 @@ In order to convert this call to CVL 2 we:
 
 bash certoraRun Compound.sol \ --verify Compound:Compound.spec \ --solc solc8.13 \ --optimistic_loop \ --prover_args '-smt_bitVectorTheory true -smt_hashingScheme plainInjectivity'
 
-## Solidity Compiler Args
+# Solidity Compiler Args
 ---
-## The Solidity Compiler Args
-
 The Solidity Compiler Args are CLI flags that are sent to the Solidity compiler. The behavior of the Solidity Args is similar to Prover Args. The flag --solc_args can only be used if there is no CLI flag that sets the Solidity flag and the value of --solc_args is a string that is sent as is to the Solidity compiler.
 
-### Example:
+Example:
 
 Consider this call to certoraRun using CVL 1 syntax:
 
-bash certoraRun Compound.sol \ --verify Compound:Compound.spec \ --solc solc8.13 \ --solc_args "['--optimize', '--optimize-runs', '200', '--experimental-via-ir']"
+bash certoraRun Compound.sol --verify Compound:Compound.spec --solc solc8.13 --solc_args "['--optimize', '--optimize-runs', '200', '--experimental-via-ir']"
 
 In CVL 2 calling optimize is using --solc_optimize
 
-bash certoraRun Compound.sol \ --verify Compound:Compound.spec \ --solc solc8.13 \ --solc_optimize 200 \ --solc_args "--experimental-via-ir"
+bash certoraRun Compound.sol --verify Compound:Compound.spec --solc solc8.13 --solc_optimize 200 --solc_args "--experimental-via-ir"
 
-## Enhanced server support
+Enhanced server support
 
 In CVL 1, two server platforms were supported:
 
 1. staging was set using the flag --staging [Branch/hotfix]
 2. production was set using the flag --cloud [Branch/hotfix]
 
-In CVL 2 the flag --server was added to replace --staging --cloud and to allow adding additional server platforms. --server gets as a parameter the platform name. --prover_version is a new flag in CVL 2 For setting the Branch/hot-fix
+In CVL 2 the flag --server was added to replace --staging --cloud and to allow adding additional server platforms. --server gets as a parameter the platform name. --prover_version is a new flag in CVL 2 for setting the Branch/hot-fix

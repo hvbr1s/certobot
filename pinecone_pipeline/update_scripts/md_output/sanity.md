@@ -1,15 +1,14 @@
-## Rule Sanity Checks
+# Rule Sanity Checks
 
 The --rule_sanity option enables some automatic checks that can warn users about certain classes of mistakes in specifications.
 
 There are several kinds of sanity checks:
 
-Sanity Checks
-sanity-vacuity determine wheper rules pass vacuously because pey rule out all models.
-sanity-assert-tautology determine wheper individual assert statements are tautologies.
-sanity-trivial-invariant detect invariants pat hold in all states, raper pan just reachable states.
-sanity-assert-structure detect unnecessarily complex assert statements.
-sanity-redundant-require detect unnecessary require statements.
+- sanity-vacuity determine whether rules pass vacuously because they rule out all models.
+- sanity-assert-tautology determine whether individual assert statements are tautologies.
+- sanity-trivial-invariant detect invariants that hold in all states, rather than just reachable states.
+- sanity-assert-structure detect unnecessarily complex assert statements.
+- sanity-redundant-require detect unnecessary require statements.
 
 The --rule_sanity option may be followed by one of none, basic, or advanced options to control which sanity checks should be executed:
 
@@ -25,11 +24,11 @@ Screenshot of rule report showing a passing rule, a failing rule, and a sanity f
 
 If a sanity check fails, you can expand the problems view to see the details of the failure:
 
-Screenshot of rule report showing the expanded details of a sanity failure
+Screenshot of rule report showing pe expanded details of a sanity failure
 
 The remainder of this document describes these checks in detail.
 
-### Vacuity checks
+# Vacuity checks
 
 The vacuity sanity check ensures that even when ignoring all the user-provided assertions, the end of the rule is reachable. This check ensures that the combination of require statements does not rule out all possible counterexamples. Rules that rule out all possible counterexamples are called vacuous rules. Since they don't actually check any assertions, they are almost certainly incorrect.
 
@@ -53,7 +52,7 @@ assert balanceOf(recipient) &gt; 0, "depositing and then transferring makes reci
 
 Although it looks like this rule is reasonable, it may actually be vacuous. The problem is that the environment e is reused, and in particular e.msg.value is the same in the calls to deposit and transfer. Since transfer is not payable, it will always revert if e.msg.value != 0. On the other hand, deposit always reverts when e.msg.value == 0. Therefore every example will either cause deposit or transfer to revert, so there are no models that reach the assert statement.
 
-## Assert tautology checks
+# Assert tautology checks
 
 The assert tautology sanity check ensures that individual assert statements are not tautologies. A tautology is a statement that is true on all examples, even if all the require and if conditions are removed. Tautology checks also consider the bodies of the contract functions. For example, assert square(x) &gt;= 0; is a tautology if square is a contract function that squares its input.
 
@@ -63,7 +62,7 @@ cvl rule tautology { uint x; uint y; require x != y; ... assert x &lt; 2 || x &g
 
 Since every uint satisfies the assertion, the assertion is tautological, which may indicate an error in the specification.
 
-## Trivial invariant checks
+# Trivial invariant checks
 
 The Trivial invariant sanity check ensures that invariants are not trivial. A trivial invariant is one that holds in all possible states, not just in reachable states.
 
@@ -77,7 +76,7 @@ cvl rule squaresNonNeg(int x) { assert x * x &gt;= 0; }
 
 The rule version is more efficient because it can do a single check in an arbitrary state rather than separately checking states after arbitrary method invocations.
 
-## Assertion structure checks
+# Assertion structure checks
 
 The assertion structure sanity check ensures that complex assert statements can't be replaced with simpler ones.
 
@@ -97,10 +96,13 @@ Overly complex assertions like this may indicate a mistake in the rule. In this 
 
 The assertion structure check tries to prove some complex logical statements by breaking them into simpler parts. The following situations are reported by the assertion structure check:
 
-|assert p =&gt; q;|is reported as a sanity violation if p is false whenever the assertion is reached (in which case the simpler assertion assert !p; more clearly describes the situation), or if q is always true (in which case assert q; is a clearer alternative).|
+|assert p =&gt; q;| |
 |---|---|
-|assert p &lt;=&gt; q;|is reported as a sanity violation if either p and q are both true whenever the assertion is reached (in which case the simpler assertions assert p; assert q; more clearly describe the situation), or if neither p nor q are ever true (in which case assert !p; assert !q; is a clearer alternative).|
-|assert p || q;|is reported as a sanity violation if either p is true whenever the assertion is reached (in which case assert p; more clearly describes the situation) or if q is always true (in which case assert q; is a clearer alternative).|
+|is reported as a sanity violation if p is false whenever the assertion is reached (in which case the simpler assertion assert !p; more clearly describes the situation), or if q is always true (in which case assert q; is a clearer alternative).| |
+|assert p &lt;=&gt; q;| |
+|is reported as a sanity violation if either p and q are both true whenever the assertion is reached (in which case the simpler assertions assert p; assert q; more clearly describe the situation), or if neither p nor q are ever true (in which case assert !p; assert !q; is a clearer alternative).| |
+|assert p || q;| |
+|is reported as a sanity violation if either p is true whenever the assertion is reached (in which case assert p; more clearly describes the situation) or if q is always true (in which case assert q; is a clearer alternative).| |
 
 Redundant require checks
 
@@ -122,8 +124,6 @@ There are several kinds of sanity checks:
 
 The --rule_sanity option may be followed by one of none, basic, or advanced options to control which sanity checks should be executed: * With --rule_sanity none or without passing --rule_sanity, no sanity checks are performed. *
 ---
-## Sanity Checks
-
 With --rule_sanity basic or just --rule_sanity without a mode, the vacuity check and the trivial invariant check are performed. With --rule_sanity advanced, all the sanity checks will be performed for all invariants and rules.
 
 We recommend starting with the basic mode, since not all rules flagged by the advanced mode are incorrect.
@@ -138,7 +138,7 @@ Screenshot of rule report showing pe expanded details of a sanity failure
 
 The remainder of this document describes these checks in detail.
 
-### Vacuity checks
+# Vacuity checks
 
 The vacuity sanity check ensures that even when ignoring all the user-provided assertions, the end of the rule is reachable. This check ensures that the combination of require statements does not rule out all possible counterexamples. Rules that rule out all possible counterexamples are called vacuous rules. Since they don't actually check any assertions, they are almost certainly incorrect.
 
@@ -149,16 +149,13 @@ Since there are no models satisfying both x > 2 and x < 1, this rule will always
 The vacuity check also flags situations where counterexamples are ruled out for reasons other than require statements. A common example comes from reusing env variables. Consider the following poorly-written rule:
 
 cvl env e; uint amount; address recipient;
-
 require balanceOf(recipient) == 0; require amount > 0;
-
 deposit(e, amount); transfer(e, recipient, amount);
-
 assert balanceOf(recipient) > 0, "depositing and then transferring makes recipient's balance positive";
 
 Although it looks like this rule is reasonable, it may actually be vacuous. The problem is that the environment e is reused, and in particular e.msg.value is the same in the calls to deposit and transfer. Since transfer is not payable, it will always revert if e.msg.value != 0. On the other hand, deposit always reverts when e.msg.value == 0. Therefore every example will either cause deposit or transfer to revert, so there are no models that reach the assert statement.
 
-### Assert tautology checks
+# Assert tautology checks
 
 The assert tautology sanity check ensures that individual assert statements are not tautologies. A tautology is a statement that is true on all examples, even if all the require and if conditions are removed. Tautology checks also consider the bodies of the contract functions. For example, assert square(x) >= 0; is a tautology if square is a contract function that squares its input.
 
@@ -168,7 +165,7 @@ cvl rule tautology { uint x; uint y; require x != y; ... assert x < 2 || x >= 2,
 
 Since every uint satisfies the assertion, the assertion is tautological, which may indicate an error in the specification.
 
-## Trivial invariant checks
+# Trivial invariant checks
 
 The Trivial invariant sanity check ensures that invariants are not trivial. A trivial invariant is one that holds in all possible states, not just in reachable states.
 
@@ -182,7 +179,7 @@ cvl rule squaresNonNeg(int x) { assert x * x >= 0; }
 
 The rule version is more efficient because it can do a single check in an arbitrary state rather than separately checking states after arbitrary method invocations.
 
-## Assertion structure checks
+# Assertion structure checks
 
 The assertion structure sanity check ensures that complex assert statements can't be replaced with simpler ones.
 
@@ -208,9 +205,9 @@ assert p <=> q; is reported as a sanity violation if either p and q are both tru
 
 assert p || q; is reported as a sanity violation if either p is true whenever the assertion is reached (in which case assert p; more clearly describes the situation) or if q is always true (in which case assert q; is a clearer alternative).
 
-## Redundant require checks
+# Redundant require checks
 
-The require redundancy sanity check highlights redundant require statements. A require is considered to be redundant if it does not rule out any {term}models <model> that haven't been ruled out by previous requires.
+The require redundancy sanity check highlights redundant require statements. A require is considered to be redundant if it does not rule out any models that haven't been ruled out by previous requires.
 
 For example, the require-redundancy check would flag the following rule: cvl rule require_redundant { uint x; require x > 3; require x > 2; assert f(x) == 2, "f must return 2"; }
 

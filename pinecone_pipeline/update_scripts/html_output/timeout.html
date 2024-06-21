@@ -190,9 +190,9 @@ resulting in two positive outcomes:
 it auto-generated, so that the user can then adapt the list
 and make the user-specified summaries more precise, or remove them altogether if the user wishes so.</p>
 <p>The Prover will not auto-summarize methods that were already summarized by the user.</p>
-<p>To enable this mode, add {ref}<code>--auto_nondet_difficult_internal_funcs</code> to the <code>certoraRun</code> command.
+<p>To enable this mode, add {ref}<code>--nondet_difficult_funcs</code> to the <code>certoraRun</code> command.
 The minimal difficulty threshold used for the auto-summarization
-can be adjusted using {ref}<code>--auto_nondet_minimal_difficulty</code>.</p>
+can be adjusted using {ref}<code>--nondet_minimal_difficulty</code>.</p>
 <h4>Example usage</h4>
 <p>Many DeFi protocols use the <code>openzeppelin</code> math libraries.
 One such library is <code>MathUpgradeable</code>, providing a <code>mulDiv</code> functionality:
@@ -465,7 +465,7 @@ changing them is known to improve running time in certain cases.</p>
 <h4><code>--prover_args '-calltraceFreeOpt true'</code></h4>
 <p>This option allows for some rather aggressive simplifications. However, it
 possibly breaks call trace generation.</p>
-<html><head><meta content="https://github.com/Certora/Documentation/blob/master/user-guide/out-of-resources/timeout.md" name="url"/><meta content="Timeouts" name="title"/><meta content="(timeouts-introduction)=
+<html><head><meta content="https://github.com/Certora/Documentation/user-guide/out-of-resources/timeout.md" name="url"/><meta content="Timeouts" name="title"/><meta content="(timeouts-introduction)=
 Timeouts
 In the following, we will give a basic classification of timeouts, explain some
 candidate causes for timeouts, and show ways to sometimes prevent them. See
@@ -661,9 +661,9 @@ resulting in two positive outcomes:
 it auto-generated, so that the user can then adapt the list
 and make the user-specified summaries more precise, or remove them altogether if the user wishes so.</p>
 <p>The Prover will not auto-summarize methods that were already summarized by the user.</p>
-<p>To enable this mode, add {ref}<code>--auto_nondet_difficult_internal_funcs</code> to the <code>certoraRun</code> command.
+<p>To enable this mode, add {ref}<code>--nondet_difficult_funcs</code> to the <code>certoraRun</code> command.
 The minimal difficulty threshold used for the auto-summarization
-can be adjusted using {ref}<code>--auto_nondet_minimal_difficulty</code>.</p>
+can be adjusted using {ref}<code>--nondet_minimal_difficulty</code>.</p>
 <h4>Example usage</h4>
 <p>Many DeFi protocols use the <code>openzeppelin</code> math libraries.
 One such library is <code>MathUpgradeable</code>, providing a <code>mulDiv</code> functionality:

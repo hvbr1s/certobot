@@ -1,4 +1,8 @@
-<p>(invariants)=</p>
+<p><code>{eval-rst}
+.. index::
+   single: invariant
+   :name: invariants
+</code></p>
 <h1>Invariants</h1>
 <p>Invariants describe a property of the state of a contract that is always
 expected to hold.</p>
@@ -97,7 +101,12 @@ external contracts are a potential source of {term}<code>unsoundness &lt;unsound
 used with care.</p>
 <p>There is an additional source of unsoundness that occurs if the invariant
 expression reverts in the before state but not in the after state.</p>
-<p>(preserved)=</p>
+<p><code>{eval-rst}
+.. index::
+   single: preserved block
+   single: invariant; preserved block
+   :name: preserved
+</code></p>
 <h2>Preserved blocks</h2>
 <p>Often, the proof that an invariant is preserved depends on another invariant,
 or on an external assumption about the system.  These assumptions can be
@@ -313,7 +322,13 @@ assert property_of(e1, arg);
 </code></pre>
 <p>}
 ```</p>
-<p>(invariant-induction)=</p>
+<p><code>{eval-rst}
+.. index::
+   single: induction
+   single: invariant; and induction
+   single: requireInvariant
+   :name: invariant-induction
+</code></p>
 <h2>Invariants and induction</h2>
 <p>This section describes the logical justification for invariant checks.  You do
 not need to understand this section to use the Prover correctly, but it helps
@@ -421,13 +436,20 @@ step, and thus the proof.</p>
 is always logically sound to add a <code>requireInvariant</code> to a <code>preserved</code> block,
 even for complicated interdependent invariants (as long as the required
 invariants have been verified).</p>
-<html><head><meta content="https://github.com/Certora/Documentation/blob/master/cvl/invariants.md" name="url"/><meta content="No Title Found" name="title"/><meta content="(invariants)=
+<html><head><meta content="https://github.com/Certora/Documentation/cvl/invariants.md" name="url"/><meta content="No Title Found" name="title"/><meta content="{eval-rst}
+.. index::
+   single: invariant
+   :name: invariants
+
 Invariants
 Invariants describe a property of the state of a contract that is always
 expected to hold.
 {caution}
-Certain features of invariants are {term}`unsound`: the invariant can be
-v" name="text"/></head><body><p>(invariants)=</p>
+Certain features of inv" name="text"/></head><body><p><code>{eval-rst}
+.. index::
+   single: invariant
+   :name: invariants
+</code></p>
 <h1>Invariants</h1>
 <p>Invariants describe a property of the state of a contract that is always
 expected to hold.</p>
@@ -526,7 +548,12 @@ external contracts are a potential source of {term}<code>unsoundness &lt;unsound
 used with care.</p>
 <p>There is an additional source of unsoundness that occurs if the invariant
 expression reverts in the before state but not in the after state.</p>
-<p>(preserved)=</p>
+<p><code>{eval-rst}
+.. index::
+   single: preserved block
+   single: invariant; preserved block
+   :name: preserved
+</code></p>
 <h2>Preserved blocks</h2>
 <p>Often, the proof that an invariant is preserved depends on another invariant,
 or on an external assumption about the system.  These assumptions can be
@@ -742,7 +769,13 @@ assert property_of(e1, arg);
 </code></pre>
 <p>}
 ```</p>
-<p>(invariant-induction)=</p>
+<p><code>{eval-rst}
+.. index::
+   single: induction
+   single: invariant; and induction
+   single: requireInvariant
+   :name: invariant-induction
+</code></p>
 <h2>Invariants and induction</h2>
 <p>This section describes the logical justification for invariant checks.  You do
 not need to understand this section to use the Prover correctly, but it helps

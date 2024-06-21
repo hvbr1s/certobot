@@ -9,7 +9,7 @@ main.load_dotenv()
 
 # Initialize LLms
 gpt = ChatOpenAI(
-    model="gpt-4-turbo",
+    model="gpt-4o",
     temperature=0.0
 )
 groq =  ChatGroq(

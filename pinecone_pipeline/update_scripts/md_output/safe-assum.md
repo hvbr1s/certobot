@@ -1,4 +1,4 @@
-## Listing Safe Assumptions
+# Listing Safe Assumptions
 
 The "Listing Safe Assumptions" design pattern introduces a structured approach to document and validate essential assumptions. Let's delve into the importance of this design pattern using the provided example.
 
@@ -27,24 +27,23 @@ rule ownerSignatureIsUnique () { ecrecoverAxioms(); bytes32 msgHashA; bytes32 ms
 
 invariant zeromessage(uint8 v, bytes32 r, bytes32 s) ecrecover(tobytes32(0), v, r, s) == 0; { preserved { ecrecoverAxioms(); } }
 ---
-## In the example, we focus on the ecrecover function used for signature verification. The objective is to articulate and
-validate key assumptions associated with this function to bolster the security of smart contracts.
+# In the example, we focus on the ecrecover function used for signature verification. The objective is to articulate and validate key assumptions associated with this function to bolster the security of smart contracts.
 
-### Importance of Listing Safe Assumptions:
+# Importance of Listing Safe Assumptions:
 
-- #### Clarity and Documentation:
+- # Clarity and Documentation:
 
 The design pattern begins by explicitly listing assumptions related to the ecrecover function. This serves as clear documentation for developers, auditors, and anyone reviewing the spec. Clarity in assumptions enhances the understanding of expected behavior.
-- #### Preventing Unexpected Behavior:
+- # Preventing Unexpected Behavior:
 
 The axioms established in the example, such as the zero message axiom and uniqueness of signature axiom, act as preventive measures against unexpected behavior. They set clear expectations for how the ecrecover function should behave under different circumstances, neglect all the counter-examples that are not relevant to the function intended behavior.
-- #### Easy To Use:
+- # Easy To Use:
 
 By encapsulating assumptions within the CVL function, this design pattern allows us to easily use those assumptions in any rule or invariant we desire.
 
 In conclusion, the "Listing Safe Assumptions" design pattern, exemplified through the ecrecover function in the provided example, serves a broader purpose in specs writing. It systematically documents assumptions, prevents unexpected behaviors, and offers ease of use throughout the rules and invariants.
 
-### Listing Safe Assumptions
+# Listing Safe Assumptions
 
 The "Listing Safe Assumptions" design pattern introduces a structured approach to document and validate essential assumptions. Let's delve into the importance of this design pattern using the provided example.
 
@@ -55,13 +54,13 @@ The "Listing Safe Assumptions" design pattern introduces a structured approach t
 
 # ecrecover properties:
 
-1. #### zero value:
+1. # zero value:
 
 ecrecover(0, v, r, s) == 0
-2. #### deterministic
+2. # deterministic
 
 ecrecover(msgHash, v, r, s) == _addr on different calls.
-3. #### uniqueness of signature
+3. # uniqueness of signature
 
 ecrecover(msgHash, v, r, s) != 0 => ecrecover(msgHash', v, r, s) == 0 where msgHash' != msgHash
 ---
@@ -71,6 +70,8 @@ ecrecover(msgHash, v, r, s) != 0 =&gt; ecrecover(msgHash, v, r', s) == 0
 where r' != r
 ecrecover(msgHash, v, r, s) != 0 =&gt; ecrecover(msgHash, v, r, s') == 0
 where s' != s
+
+**/
 
 function ecrecoverAxioms() { // zero value: require (forall uint8 v. forall bytes32 r. forall bytes32 s.
 ecrecover(to_bytes32(0), v, r, s) == 0); // uniqueness of signature require (forall uint8 v. forall bytes32 r. forall bytes32 s.

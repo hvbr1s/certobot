@@ -48,7 +48,7 @@ def process_markdown_files(base_path, output_dir):
 
                 html_content = markdown_to_html(md_content)
                 title = extract_title(md_content)
-                url = "https://github.com/Certora/Documentation/blob/master/" + os.path.relpath(file_path, start=base_path).replace('\\', '/')
+                url = "https://github.com/Certora/Documentation/" + os.path.relpath(file_path, start=base_path).replace('\\', '/')
                 text = BeautifulSoup(html_content, 'html.parser').get_text()[:200]  # Extract the first 200 characters of text
 
                 final_html = embed_metadata(html_content, url, title, text)

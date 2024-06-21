@@ -212,7 +212,7 @@ async def ragchat(user_id, chat_history):
 # RAGChat route
 @app.post('/agent') 
 #async def react_description(query: Query, api_key: str = Depends(get_api_key)): 
-async def react_description(query: Query): # to demonstrate the UI 
+async def react_description(query: Query): # test route
 
     # Deconstruct incoming query
     user_id = query.user_id

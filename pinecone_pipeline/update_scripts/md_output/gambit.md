@@ -1,19 +1,19 @@
-## Gambit: Mutant Generation for Solidity
+# Gambit: Mutant Generation for Solidity
 
 Gambit is a state-of-the-art mutation system for Solidity. By applying predefined syntax transformations called mutation operators (for example, convert a + b to a - b) to a Solidity program's source code, Gambit generates variants of the program called mutants. Mutants can be used to evaluate test suites or specs used for formal verification: each mutant represents a potential bug in the program, and stronger test suites and specifications should detect more mutants.
 
-### Requirements
+# Requirements
 
 - Gambit is written in Rust. You'll need to install Rust and Cargo to build Gambit.
-- Gambit uses solc, the Solidity compiler, to generate mutants. You'll need to have a solc binary that is compatible with the project you are mutating (see the --solc option in gambit mutate --help)
+- Gambit uses solc, the Solidity compiler, to generate mutants. You'll need to have a solc binary that is compatible with the project you are mutating (see the --solc option in gambit mutate --help).
 
-### Installation
+# Installation
 
 You can download prebuilt Gambit binaries for Linux x86-64 and Mac from our releases page. For Windows and Linux ARM, you must build Gambit from source.
 
 Building Gambit from source
 
-To build Gambit from source, clone the Gambit repository and run
+To build Gambit from source, clone the Gambit repository and run:
 
 cargo install --path .
 
@@ -21,7 +21,7 @@ from this repository's root. This will build Gambit and install it to a globally
 
 You can also build gambit with cargo build --release from the root of this repository. This will create a gambit binary in gambit/target/release/ which you can manually place on your path or invoke directly (e.g., by calling path/to/gambit/target/release/gambit).
 
-### Usage
+# Usage
 
 Gambit has two main commands: mutate and summary. gambit mutate is responsible for mutating code, and gambit summary is a convenience command for summarizing generated mutants in a human-readable way.
 
@@ -43,7 +43,9 @@ Run gambit --help for more information.
 
 {note} All relative paths specified in a JSON configuration file are interpreted to be relative to the configuration file's parent directory.
 
-In the following section we provide examples of how to run Gambit using both --filename and --json. We provide more complete documentation in the {ref}configuration-files and {ref}cli-options sections below. Examples
+In the following section we provide examples of how to run Gambit using both --filename and --json. We provide more complete documentation in the {ref}configuration-files and {ref}cli-options sections below.
+
+Examples
 
 Unless otherwise noted, examples use code from benchmarks/ and are run from the root of the Gambit repository.
 
@@ -54,7 +56,9 @@ This will generate: Generated 34 mutants in 0.69 seconds
 {note} The mutated file must be located wipin your current working directory or one of its subdirectories. If you want to mutate code in an arbitrary directory, use pe `--sourceroot` option.
 
 Example 2: Mutating and downsampling
-The above command produced 34 mutants which may be more pan you need. Gambit provides a way to randomly downsample pe number of mutants wip pe --num_mutants or -n option:
+
+The above command produced 34 mutants which may be more than you need. Gambit provides a way to randomly downsample the number of mutants with the --num_mutants or -n option:
+
 bash gambit mutate -f benchmarks/BinaryOpMutation/BinaryOpMutation.sol -n 3
 which will generate: Generated 3 mutants in 0.15 seconds
 
@@ -65,7 +69,6 @@ Example 3: Viewing Gambit results
 Gambit outputs all of its results in gambit_out:
 
 bash tree -L 2 gambit_out
-
 This produces: gambit_out ├── gambit_results.json ├── input_json │ ├── BinaryOpMutation.sol_json.ast │ └── BinaryOpMutation.sol_json.ast.json ├── mutants │ ├── 1 │ ├── 2 │ └── 3 └── mutants.log
 
 See the {ref}results-directory section for a detailed explanation of this layout. The gambit summary command pretty prints each mutant for easy inspection:
@@ -78,33 +81,33 @@ Example 4: Specifying solc pass-through arguments
 
 The Solidity compiler (solc) may need some extra information to successfully run on a file or a project. Gambit enables this with pass-through arguments that, as the name suggests, are passed directly through to the solc compiler.
 ---
-## For projects that have complex dependencies and imports, you may need to:
+For projects that have complex dependencies and imports, you may need to:
 
-Specify base paths: To specify the Solidity --base-path argument, use --solc_base_path:
+- Specify base paths: To specify the Solidity --base-path argument, use --solc_base_path:
 
 bash gambit mutate --filename path/to/file.sol --solc_base_path base/path/dir
 
-Specify remappings: To indicate where Solidity should find libraries, use solc's import remapping syntax with --solc_remappings:
+- Specify remappings: To indicate where Solidity should find libraries, use solc's import remapping syntax with --solc_remappings:
 
 bash gambit mutate --filename path/to/file.sol \ --solc_remappings
 @openzeppelin=node_modules/@openzeppelin @foo=node_modules/@foo
 
 {warning} The paths should NOT end with a trailing /
 
-Specify allow paths: To include additional allowed paths via solc's --allow-paths argument, use --solc_allow_paths:
+- Specify allow paths: To include additional allowed paths via solc's --allow-paths argument, use --solc_allow_paths:
 
 bash gambit mutate --filename path/to/file.sol \ --solc_allow_paths PATH1 --solc_allow_paths
 PATH2 ...
 
-Specify include-path: To make an additional source directory available to the default import callback via solc's [--include-path][included] argument, use --solc_include_path:
+- Specify include-path: To make an additional source directory available to the default import callback via solc's [--include-path][included] argument, use --solc_include_path:
 
 bash gambit mutate --filename path/to/file.sol --solc_include_path PATH
 
-Use optimization: To run the Solidity compiler with optimizations (solc's --optimize argument), use --solc_optimize:
+- Use optimization: To run the Solidity compiler with optimizations (solc's --optimize argument), use --solc_optimize:
 
 bash gambit mutate --filename path/to/file.sol --solc_optimize
 
-## Example 5: The --sourceroot option
+Example 5: The --sourceroot option
 
 Gambit needs to track the location of source files that it mutates within a project: for instance, imagine there are files foo/Foo.sol and bar/Foo.sol. These are separate files, and their path prefixes are needed to determine this. Gambit addresses this with the --sourceroot option: the source root indicates to Gambit the root of the files that are being mutated, and all source file paths (both original and mutated) are reported relative to this source root.
 
@@ -112,7 +115,7 @@ Gambit needs to track the location of source files that it mutates within a proj
 
 When running gambit mutate with the --filename option, source root defaults to the current working directory. When running gambit mutate with the --json option, source root defaults to the directory containing the configuration JSON.
 
-Here are some examples of using the --sourceroot option:
+Here are some examples of using the --sourceroot option.
 
 1. From the root of the Gambit repository, run:
 
@@ -126,7 +129,8 @@ Generated 1 mutants in 0.13 seconds
 gambit_out/mutants/1/benchmarks/BinaryOpMutation/BinaryOpMutation.sol
 
 The first command generates a single mutant, and its source path is relative to ., the default source root. We can see that the reported paths in mutants.log, and the mutant file path in gambit_out/mutants/1, are the relative to this source root: benchmarks/BinaryOpMutation/BinaryOpMutation.sol
-2. Suppose we want our paths to be reported relative to benchmarks/BinaryOpMutation. We can run
+
+Suppose we want our paths to be reported relative to benchmarks/BinaryOpMutation. We can run
 ---
 bash gambit mutate -f benchmarks/BinaryOpMutation/BinaryOpMutation.sol -n 1 --sourceroot benchmarks/BinaryOpMutation cat gambit_out/mutants.log find gambit_out/mutants -name "*.sol"
 
@@ -146,7 +150,7 @@ This will try to find the specified file inside of scripts, and since it doesn't
 
 Gambit prints an error and exits.
 
-## Example 6: Running Gambit using a configuration file
+# Example 6: Running Gambit using a configuration file
 
 To run gambit with a configuration file, use the --json argument: bash gambit mutate --json benchmarks/config-jsons/test1.json
 
@@ -158,7 +162,7 @@ In addition to specifying the command line arguments, you can list the specific 
 
 Note: Any paths provided by the configuration file are resolved relative to the configuration file's parent directory.
 
-## Configuration Files
+# Configuration Files
 
 Configuration files allow you to save complex configurations and perform multiple mutations at once. Gambit uses a simple JSON object format to store mutation options, where each --option VALUE specified on the CLI is represented as a "option": VALUE key/value pair in the JSON object. Boolean --flags are enabled by storing them as true: "flag": true. For instance, --no_overwrite would be written as "no_overwrite": true.
 
@@ -170,8 +174,6 @@ To execute this using a configuration file you would write the following to exam
 
 json { "filename": "benchmarks/BinaryOpMutation/BinaryOpMutation.sol" }
 ---
-## Gambit Configuration
-
 Gambit also supports using multiple configurations in the same file: instead of a single JSON object, your configuration file should contain an array of objects:
 
 json
@@ -184,7 +186,7 @@ Paths in Configuration Files
 
 Relative paths in a Gambit configuration file are relative to the parent directory of the configuration file. So if the JSON file listed above was moved to the benchmarks/ directory the "filename" would need to be updated to BinaryOpMutation/BinaryOpMutation.sol.
 
-## Results Directory
+Results Directory
 
 gambit mutate produces all results in an output directory (default: gambit_out). Here is an example:
 
@@ -195,13 +197,24 @@ which produces:
 Generated 5 mutants in 0.15 seconds
 
 gambitout
+├── gambitresults.json
+├── input_json
+├── mutants
+│ ├── 1
+│ ├── 2
+│ ├── 3
+│ ├── 4
+│ └── 5
+└── mutants.log
 
-- gambitresults.json: a JSON file with detailed results
+This has the following structure:
+
+- gambit_results.json: a JSON file with detailed results
 - input_json/: intermediate files produced by solc that are used during mutation
 - mutants/: exported mutants. Each mutant is in its own directory named after its mutant ID (mid) 1, 2, 3, ...
 - mutants.log: a log file with all mutant information. This is similar to results.json but in a different format and with different information
 
-## CLI Options
+CLI Options
 
 gambit mutate supports the following options; for a comprehensive list, run gambit mutate --help:
 
@@ -268,17 +281,17 @@ from this repository's root. This will build Gambit and install it to a globally
 
 You can also build gambit with cargo build --release from the root of this repository. This will create a gambit binary in gambit/target/release/ which you can manually place on your path or invoke directly (e.g., by calling path/to/gambit/target/release/gambit).
 ---
-## Usage
+# Usage
 
-Gambit has two main commands: mutate and summary. gambit mutate is responsible for mutating code, and gambit summary is a convenience command for summarizing generated mutants in a human-readable way.
+Gambit has two main commands: **mutate and summary. **gambit mutate** is responsible for mutating code, and gambit summary** is a convenience command for summarizing generated mutants in a human-readable way.
 
-Running gambit mutate will invoke solc, so make sure it is visible on your PATH. Alternatively, you can specify where Gambit can find the Solidity compiler with the option --solc path/to/solc, or specify a solc binary (e.g., solc8.12) with the option --solc solc8.12.
+Running **gambit mutate will invoke solc, so make sure it is visible on your PATH. Alternatively, you can specify where Gambit can find the Solidity compiler with the option --solc path/to/solc, or specify a solc binary (e.g., solc8.12) with the option --solc solc8.12**.
 
-{note} All tests (cargo test) are currently run using solc8.13. Your tests may fail if your solc points at a different version of the compiler.
+**{note}** All tests (cargo test) are currently run using solc8.13. Your tests may fail if your solc points at a different version of the compiler.
 
 Running gambit mutate
 
-The gambit mutate command expects either a --filename argument or a --json argument. Using --filename allows you to specify a specific Solidity file to mutate:
+The **gambit mutate command expects either a --filename argument or a **--json** argument. Using --filename** allows you to specify a specific Solidity file to mutate:
 
 bash gambit mutate --filename file.sol
 
@@ -286,43 +299,42 @@ However, if you want to mutate multiple files or apply a more complex set of par
 
 bash gambit mutate --json gambit_conf.json
 
-Run gambit --help for more information.
+Run **gambit --help** for more information.
 
-{note} All relative paths specified in a JSON configuration file are interpreted to be relative to the configuration file's parent directory.
+**{note}** All relative paths specified in a JSON configuration file are interpreted to be relative to the configuration file's parent directory.
 
-In the following section we provide examples of how to run Gambit using both --filename and --json. We provide more complete documentation in the configuration-files and cli-options sections below.
+In the following section we provide examples of how to run Gambit using both **--filename and --json. We provide more complete documentation in the {ref}configuration-files and {ref}**cli-options sections below.
 
-## Examples
+# Examples
 
 Unless otherwise noted, examples use code from benchmarks/ and are run from the root of the Gambit repository.
 
-Example 1: Mutating a single file
+**Example 1: Mutating a single file**
 
-To mutate a single file, use the --filename option (or -f), followed by the file to mutate.
+To mutate a single file, use the **--filename option (or -f**), followed by the file to mutate:
 
 bash gambit mutate -f benchmarks/BinaryOpMutation/BinaryOpMutation.sol
 
-This will generate: Generated 34 mutants in 0.69 seconds
+This will generate: **Generated 34 mutants in 0.69 seconds**
 
-{note} The mutated file must be located within your current working directory or one of its subdirectories. If you want to mutate code in an arbitrary directory, use the --sourceroot option.
+**{note}** The mutated file must be located within your current working directory or one of its subdirectories. If you want to mutate code in an arbitrary directory, use the --sourceroot option.
 
-Example 2: Mutating and downsampling
+**Example 2: Mutating and downsampling**
 
-The above command produced 34 mutants which may be more than you need. Gambit provides a way to randomly downsample the number of mutants with the --num_mutants or -n option:
+The above command produced 34 mutants which may be more than you need. Gambit provides a way to randomly downsample the number of mutants with the **--num_mutants or -n** option:
 
 bash gambit mutate -f benchmarks/BinaryOpMutation/BinaryOpMutation.sol -n 3
 
-which will generate: Generated 3 mutants in 0.15 seconds
+which will generate: **Generated 3 mutants in 0.15 seconds**
 
-Example 3: Viewing Gambit results
+**Example 3: Viewing Gambit results**
 ---
-## {note} This example assumes you've just completed Example 2.
+{note} This example assumes you've just completed Example 2.
 
 Gambit outputs all of its results in gambit_out:
 
 bash tree -L 2 gambit_out
 
-This produces:
 gambit_out
 ├── gambit_results.json
 ├── input_json
@@ -334,13 +346,13 @@ gambit_out
 │   └── 3
 └── mutants.log
 
-See the results-directory section for a detailed explanation of this layout. The gambit summary command pretty prints each mutant for easy inspection:
+See the {ref}results-directory section for a detailed explanation of this layout. The gambit summary command pretty prints each mutant for easy inspection:
 
 The output of gambit summary
 
 By default gambit summary prints info on all mutants. If you are interested in particular mutants you can specify a subset of mutant ids with the --mids flag. For instance, gambit summary --mids 3 4 5 will only print info for mutant ids 3 through 5.
 
-## Example 4: Specifying solc pass-through arguments
+Example 4: Specifying solc pass-through arguments
 
 The Solidity compiler (solc) may need some extra information to successfully run on a file or a project. Gambit enables this with pass-through arguments that, as the name suggests, are passed directly through to the solc compiler.
 
@@ -352,75 +364,40 @@ bash gambit mutate --filename path/to/file.sol --solc_base_path base/path/dir
 
 - Specify remappings: To indicate where Solidity should find libraries, use solc's import remapping syntax with --solc_remappings:
 
-bash gambit mutate --filename path/to/file.sol \ --solc_remappings
-@openzeppelin=node_modules/@openzeppelin @foo=node_modules/@foo
+bash gambit mutate --filename path/to/file.sol --solc_remappings @openzeppelin=node_modules/@openzeppelin @foo=node_modules/@foo
 
 {warning} The paths should ***NOT*** end with a trailing /
 
-Specify allow paths: To include additional allowed paths via solc's --allow-paths argument, use -- solc_allow_paths:
+- Specify allow paths: To include additional allowed paths via solc's --allow-paths argument, use --solc_allow_paths:
 
-bash gambit mutate --filename path/to/file.sol \ --solc_allow_paths PATH1 --solc_allow_paths PATH2 ...
+bash gambit mutate --filename path/to/file.sol --solc_allow_paths PATH1 --solc_allow_paths PATH2 ...
 
-Specify include-path: To make an additional source directory available to the default import callback via solc's [-- include-path][included] argument, use --solc_include_path:
+- Specify include-path: To make an additional source directory available to the default import callback via solc's [-- include-path][included] argument, use --solc_include_path:
 
 bash gambit mutate --filename path/to/file.sol --solc_include_path PATH
 
-Use optimization: To run the Solidity compiler with optimizations (solc's --optimize argument), use -- solc_optimize:
+- Use optimization: To run the Solidity compiler with optimizations (solc's --optimize argument), use --solc_optimize:
 
 bash gambit mutate --filename path/to/file.sol --solc_optimize
 
-## Example 5: The --sourceroot option
+Example 5: The --sourceroot option
 
 Gambit needs to track the location of source files that it mutates within a project: for instance, imagine there are files foo/Foo.sol and bar/Foo.sol. These are separate files, and their path prefixes are needed to determine this. Gambit addresses this with the --sourceroot option: the source root indicates to Gambit the root of the files that are being mutated, and all source file paths (both original and mutated) are reported relative to this source root.
 ---
-## {note} If Gambit encounters a source file that does not belong to the source root it will print an error message and exit.
-
-When running gambit mutate with the --filename option, source root defaults to the current working directory. When running gambit mutate with the --json option, source root defaults to the directory containing the configuration JSON.
-
-Here are some examples of using the --sourceroot option:
-
-1. From pe root of pe Gambit repository, run:
-bash gambit mutate -f benchmarks/BinaryOpMutation/BinaryOpMutation.sol -n 1 cat
-gambit_out/mutants.log find gambit_out/mutants -name "*.sol"
-
-This should output the following:
-
-Generated 1 mutants in 0.13 seconds
-1,BinaryOpMutation,benchmarks/BinaryOpMutation/BinaryOpMutation.sol,23:10, % ,*
-gambit_out/mutants/1/benchmarks/BinaryOpMutation/BinaryOpMutation.sol
-
-The first command generates a single mutant, and its source path is relative to ., the default source root. We can see that the reported paths in mutants.log, and the mutant file path in gambit_out/mutants/1, are relative to this source root: benchmarks/BinaryOpMutation/BinaryOpMutation.sol
-
-2. Suppose we want our paps to be reported relative to benchmarks/BinaryOpMutation. We can run:
-bash gambit mutate -f benchmarks/BinaryOpMutation/BinaryOpMutation.sol -n 1 --sourceroot benchmarks/BinaryOpMutation cat gambit_out/mutants.log find gambit_out/mutants -name "*.sol"
-
-which will output:
-
-Generated 1 mutants in 0.13 seconds 1,BinaryOpMutation,BinaryOpMutation.sol,23:10, % ,*
-gambit_out/mutants/1/BinaryOpMutation.sol
-
-The reported filenames, and the offset path inside of gambit_out/mutants/1/, are now relative to the source root that we specified.
-
-3. Finally, suppose we use a source root pat doesn't contain pe source file:
-bash gambit mutate -f benchmarks/BinaryOpMutation/BinaryOpMutation.sol -n 1 --sourceroot scripts
-
-This will try to find the specified file inside of scripts, and since it doesn't exist Gambit reports the error:
-
-[ERROR gambit] [!!] Illegal Configuration: Resolved filename `/Users/USER/Gambit/benchmarks/BinaryOpMutation/BinaryOpMutation.sol` is not prefixed by the derived source root /Users/USER/Gambit/scripts
-
-Gambit prints an error and exits.
-
-## Example 6: Running Gambit using a configuration file
+# Example 6: Running Gambit using a configuration file
 
 To run gambit with a configuration file, use the --json argument: bash gambit mutate --json benchmarks/config-jsons/test1.json
 
 The configuration file is a JSON file containing the command line arguments for gambit and additional configuration options:
 
-json { "filename": "../10Power/TenPower.sol", "sourceroot": "..", "solc_remappings": [ "@openzeppelin=node_modules/@openzeppelin" ], }
+json
+{ "filename": "../10Power/TenPower.sol", "sourceroot": "..", "solc_remappings": [ "@openzeppelin=node_modules/@openzeppelin" ] }
 ---
 In addition to specifying the command line arguments, you can list the specific mutants that you want to apply, the specific functions you wish to mutate, and more. See the benchmark/config-jsons directory for examples.
 
-Configuration Files
+Note: Any paths provided by the configuration file are resolved relative to the configuration file's parent directory.
+
+# Configuration Files
 
 Configuration files allow you to save complex configurations and perform multiple mutations at once. Gambit uses a simple JSON object format to store mutation options, where each --option VALUE specified on the CLI is represented as a "option": VALUE key/value pair in the JSON object. Boolean --flags are enabled by storing them as true: "flag": true. For instance, --no_overwrite would be written as "no_overwrite": true.
 
@@ -430,20 +407,19 @@ bash gambit mutate -f benchmarks/BinaryOpMutation/BinaryOpMutation.sol
 
 To execute this using a configuration file you would write the following to example-1.json to the root of this repository and run gambit mutate --json example-1.json
 
-json { "filename": "benchmarks/BinaryOpMutation/BinaryOpMutation.sol" }
+{ "filename": "benchmarks/BinaryOpMutation/BinaryOpMutation.sol" }
 
 Gambit also supports using multiple configurations in the same file: instead of a single JSON object, your configuration file should contain an array of objects:
 
-json
-[ { "filename": "Foo.sol", "contract": "C", "functions": ["bar", "baz"], "solc": "solc8.12", "solc_optimize": true }, { "filename": "Blip.sol", "contract": "D", "functions": ["bang"], "solc": "solc8.12" "mutations": [ "binary-op-mutation", "swap-arguments-operator-mutation" ] } ]
+[ { "filename": "Foo.sol", "contract": "C", "functions": ["bar", "baz"], "solc": "solc8.12", "solc_optimize": true }, { "filename": "Blip.sol", "contract": "D", "functions": ["bang"], "solc": "solc8.12", "mutations": [ "binary-op-mutation", "swap-arguments-operator-mutation" ] } ]
 
 This configuration file will perform all mutations on Foo.sol's functions bar and baz in the contract C, and only binary-op-mutation and swap-arguments-operator-mutation mutations on the function bang in the contract D. Both will compile using the Solidity compiler version solc5.12.
 
-Paths in Configuration Files
+# Paths in Configuration Files
 
 Relative paths in a Gambit configuration file are relative to the parent directory of the configuration file. So if the JSON file listed above was moved to the benchmarks/ directory the "filename" would need to be updated to BinaryOpMutation/BinaryOpMutation.sol.
 
-Results Directory
+# Results Directory
 
 gambit mutate produces all results in an output directory (default: gambit_out). Here is an example:
 
@@ -453,18 +429,9 @@ which produces:
 
 Generated 5 mutants in 0.15 seconds
 
-gambitout
-├── gambitresults.json
-├── input_json
-├── mutants
-│   ├── 1
-│   ├── 2
-│   ├── 3
-│   ├── 4
-│   └── 5
-└── mutants.log
+gambitout ├── gambitresults.json ├── input_json ├── mutants │ ├── 1 │ ├── 2 │ ├── 3 │ ├── 4 │ └── 5 └── mutants.log
 ---
-## CLI Options
+# CLI Options
 
 |Option|Description|
 |---|---|
@@ -478,7 +445,7 @@ gambitout
 |--mutations|specify one or more mutation operators to use; only generates mutants that are created using the specified operators|
 |--skip_validate|only generate mutants without validating them by compilation|
 
-## Mutation Operators
+# Mutation Operators
 
 |Mutation Operator|Description|Example|
 |---|---|---|

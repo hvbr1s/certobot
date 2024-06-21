@@ -27,7 +27,7 @@ mul = lambda(a, b) if (a == 5) 5 else 299
 <p>In this case we have a <em>spurious counterexample</em> caused by our overapproximation.</p>
 <h3>Axiomatized Uninterpreted Function as an Overapproximation</h3>
 <p>There is a middle ground that we can take between precisely modeling program behavior and the above overapproximation. We can use uninterpreted functions and add axioms to them. In the above example, we let the solver decide everything about <code>uninterp_mul</code>. But it turns out we can give hints to the solver, to more closely approximate the behavior of <code>integer_arithmetic_mul</code></p>
-<html><head><meta content="https://github.com/Certora/Documentation/blob/master/confluence/advanced/approximation.md" name="url"/><meta content="No Title Found" name="title"/><meta content="Approximation
+<html><head><meta content="https://github.com/Certora/Documentation/confluence/advanced/approximation.md" name="url"/><meta content="No Title Found" name="title"/><meta content="Approximation
 The Problem
 Many potential questions we may like to ask about programs in any language are inherently undecidable. For example, in general, it is impossible to know whether or not a prog" name="text"/></head><body><h1>Approximation</h1>
 <h2>The Problem</h2>

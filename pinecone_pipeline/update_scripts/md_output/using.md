@@ -1,12 +1,12 @@
-## Using Statements
+# Using Statements
 
 The using statement introduces a variable that can be used to call methods on contracts other than the main contract being verified.
 
-Examples
+# Examples
 
-{ref}using-example
+{ref}using-example An example for using
 
-Syntax An example for using
+# Syntax
 
 The syntax for using statements is given by the following EBNF grammar:
 

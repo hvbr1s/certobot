@@ -1,4 +1,4 @@
-## Storage in Call Trace
+Storage in Call Trace
 
 Introduction
 
@@ -44,53 +44,55 @@ There are four computational types:
 
 If the type cannot be determined, it is displayed as Unknown.
 ---
-## Limitations of the Current "Computational Type" Resolution
+# Limitations of the Current "Computational Type" Resolution
 
 The current resolution for "computational types" has limitations:
 
 - Only assignments and storage changes (store, havoc, restore) are considered.
 - Requires or values that cause revert are not considered in the type resolution.
-- Reverts Strings or bytes keys of maps are not supported in the Call Trace display.
+- Strings or bytes keys of maps are not supported in the Call Trace display.
+
+# Reverts
 
 When a contract execution encounters an issue that violates a require statement or explicitly invokes a revert, the entire state changes may be reverted to the previous state. This is crucial for understanding and debugging issues in contracts. The call trace provides a clear view of the revert reason and the path that caused the revert as present in the following picture.
 
 Example Revert
 
-## Havocs
+# Havocs
 
 Havoc operations introduce non-determinism into the contract execution, allowing the SMT solver to choose a random value. Identifying and understanding havoc points in the Call Trace is essential for comprehending the unpredictable aspects of the contract's behavior. Havoc values are displayed in the Call Trace like the following picture.
 
 Example Havoc
 
-## Call Resolution
+# Call Resolution
 
 A Call Resolution is a representation that correlates the summarization called during the execution trace with the corresponding storage changes. This helps in understanding the flow of the contract execution and associating storage modifications with specific summarization calls. The Call Resolution is displayed in the Call Trace like the following picture.
 
 Example Call Resolution
 
-## Storage in Call Trace
+# Storage in Call Trace
 
-### Introduction
+# Introduction
 
 When exploring the counterexample to an assertion in a CVL (Certora Verification Language) specification, the Prover provides a Call Trace that includes information about the state of the contracts. This trace contains details about the storage values at the beginning of the rule and tracks updates to the storage during the execution of the contracts' functions.
 
-Example Storage Data
+# Example Storage Data
 
 Example Storage Data
 
-### How Can the Storage Change?
+# How Can the Storage Change?
 
 While specific storage slots or fields can be assigned new values, it is also possible for the storage of the entire contract to revert to the previous state. This can occur due to the failure of a Solidity require statement, an explicit Solidity revert statement, the restoration of storage to a previously saved state in CVL (e.g., func() at init), or the application of havoc (invoking functions that havoc the state of contracts).
 
-### When Do We Show the Storage State?
+# When Do We Show the Storage State?
 
 In the Call Trace section, the storage state is presented in three key places:
 
 At the beginning of the execution.
 ---
-## Storage State Presentation
+# Storage State Presentation
 
-The presentation of the storage state can be toggled on or off using a button highlighted in red.
+The presentation of the storage state can be toggled on or off using a button highlighted in red, as shown below:
 
 Example Storage Toggle
 
@@ -103,7 +105,7 @@ For each contract in the specification, the Call Trace displays all storage acce
 - Computational type
 - Whether it was changed since the previous time the storage was shown
 
-### Computational Types
+Computational Types
 
 There are four computational types:
 
@@ -114,26 +116,27 @@ There are four computational types:
 
 If the type cannot be determined, it is displayed as Unknown.
 
-### Limitations of the Current "Computational Type" Resolution
+Limitations of the Current "Computational Type" Resolution
 
 The current resolution for "computational types" has limitations:
 
 - Only assignments and storage changes (store, havoc, restore) are considered.
 - Requires or values that cause revert are not considered in the type resolution.
+- Strings or bytes keys of maps are not supported in the Call Trace display.
 
-Reverts Strings or bytes keys of maps are not supported in the Call Trace display.
+Reverts
 
-When a contract execution encounters an issue that violates a require statement or explicitly invokes a revert, the entire state changes may be reverted to the previous state. This is crucial for understanding and debugging issues in contracts. The call trace provides a clear view of the revert reason and the path that caused the revert.
+When a contract execution encounters an issue that violates a require statement or explicitly invokes a revert, the entire state changes may be reverted to the previous state. This is crucial for understanding and debugging issues in contracts. The call trace provides a clear view of the revert reason and the path that caused the revert as present in the following picture.
 
 Example Revert
 
-### Havocs
+Havocs
 
-Havoc operations introduce non-determinism into the contract execution, allowing the SMT solver to choose a random value. Identifying and understanding havoc points in the Call Trace is essential for comprehending the unpredictable aspects of the contract's behavior. Havoc values are displayed in the Call Trace.
+Havoc operations introduce non-determinism into the contract execution, allowing the SMT solver to choose a random value. Identifying and understanding havoc points in the Call Trace is essential for comprehending the unpredictable aspects of the contract's behavior. Havoc values are displayed in the Call Trace like the following picture.
 
 Example Havoc
 
-### Call Resolution
+Call Resolution
 
 A Call Resolution is a representation that correlates the summarization called during the execution trace with the corresponding storage changes. This helps in understanding the flow of the contract execution and associating storage.
 ---

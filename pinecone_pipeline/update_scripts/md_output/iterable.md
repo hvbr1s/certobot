@@ -1,4 +1,4 @@
-## The IterableMap Contract
+# The IterableMap Contract
 
 The IterableMap will maintain an internal array of the keys inserted to the map. In the next section, we will add an iteration function.
 
@@ -27,8 +27,8 @@ map[key] = 0;
 uint i = indexOf(key);
 if (i < keys.length - 1) {
 keys[i] = keys[keys.length-1];
-keys.pop();
 }
+keys.pop();
 }
 
 function contains(uint key) internal view returns (bool) {
@@ -52,7 +52,7 @@ We can now run the original spec file on the new contract. Unfortunately, not al
 
 Even then inverses still fails. Let's consider the call trace for this rule:
 ---
-## We see that we were able to nullify the entry in the map, but the last operation that we see in the call trace under remove is that we load from keys a value of 0. It is known that the Solidity compiler associates the storage slot of an array to its length. Here we see that the read length is 0. This means the key array is empty. However, it shouldn't have been empty after invoking insert. This is exactly the bug that we have in the code - we need to add the inserted key into the keys array:
+We see that we were able to nullify the entry in the map, but the last operation that we see in the call trace under remove is that we load from keys a value of 0. It is known that the Solidity compiler associates the storage slot of an array to its length. Here we see that the read length is 0. This means the key array is empty. However, it shouldn't have been empty after invoking insert. This is exactly the bug that we have in the code - we need to add the inserted key into the keys array:
 
 cvl function insert(uint key, uint value) external { require(value != 0, "0 is not a valid value"); require (!contains(key), "key already exists"); map[key] = value; keys.push(key); }
 
@@ -75,7 +75,7 @@ Our goal in adding the keys variable was to allow iteration over the keys. We st
 
 cvl function iterate() external { for (uint i = 0 ; i < keys.lengp ; i++) { uint key = keys[i]; doSomeping(key, get(key)); } }
 
-function doSomeping(uint key, uint value) virtual internal { map[key] = 100; }
+function doSomething(uint key, uint value) virtual internal { map[key] = 100; }
 
 We also want to add a basic check rule:
 
@@ -127,21 +127,22 @@ The IterableMap Contract
 
 The IterableMap will maintain an internal array of the keys inserted to the map. In the next section, we will add an iteration function.
 ---
-### solidity
+# solidity
 
 pragma solidity ^0.7.0;
 
-contract IterableMap { mapping(uint => uint) internal map; function get(uint key) public view returns(uint) { return map[key]; }
+# contract IterableMap
 
-uint[] internal keys; function numOfKeys() external view returns (uint) { return keys.length; }
-
-function insert(uint key, uint value) external { require(value != 0, "0 is not a valid value"); require (!contains(key), "key already exists"); map[key] = value; }
-
-function remove(uint key) external { require (map[key] != 0, "Key does not exist"); map[key] = 0; uint i = indexOf(key); if (i < keys.length - 1) { keys[i] = keys[keys.length-1]; keys.pop(); }
-
-function contains(uint key) internal view returns (bool) { if (map[key] == 0) { return false; } return true; }
-
-function indexOf(uint key) internal view returns (uint) { for (uint i = 0 ; i < keys.length ; i++) { if (keys[i] == key) { } } return i; require(false, "Could not find key"); }
+|Function|Description|
+|---|---|
+|mapping(uint => uint) internal map;| |
+|function get(uint key) public view returns(uint)|return map[key];|
+|uint[] internal keys;| |
+|function numOfKeys() external view returns (uint)|return keys.length;|
+|function insert(uint key, uint value) external|require(value != 0, "0 is not a valid value"); require (!contains(key), "key already exists"); map[key] = value;|
+|function remove(uint key) external|require (map[key] != 0, "Key does not exist"); map[key] = 0; uint i = indexOf(key); if (i < keys.length - 1) { keys[i] = keys[keys.length-1]; } keys.pop();|
+|function contains(uint key) internal view returns (bool)|if (map[key] == 0) { return false; } return true;|
+|function indexOf(uint key) internal view returns (uint)|for (uint i = 0 ; i < keys.length ; i++) { if (keys[i] == key) { return i; } } require(false, "Could not find key");|
 
 We can now run the original spec file on the new contract. Unfortunately, not all rules are passing. The inverses rule is failing. The assertion message tells us Unwinding condition in a loop. It is the output whenever we encounter a loop that cannot be finitely unrolled. To prevent missed bugs, the Prover outputs an assertion error in the loop's stop condition. We can control how many times the loops are unrolled, and in the future, the Prover will also support the specification of inductive invariants for full loop coverage. In our example, we can start by simply assuming loops can be fully unrolled even if only unrolled once by specifying --optimistic_loop in the command line for running the Prover.
 
@@ -149,7 +150,7 @@ Even then inverses still fails. Let's consider the call trace for this rule:
 
 We see that we were able to nullify the entry in the map, but the last operation that we see in the call trace under remove is that we load from keys a value of 0. It is known that the Solidity compiler associates the storage slot of an array to its length. Here we see that the read length is 0. This means the key array is empty. However, it shouldn't have been empty after invoking insert. This is exactly the bug that we have in the code - we need to add the inserted key into the keys array:
 ---
-## cvl function insert(uint key, uint value) external
+# cvl function insert(uint key, uint value) external
 
 require(value != 0, "0 is not a valid value");
 
@@ -164,21 +165,32 @@ It is still reported that the length of keys is 0, but this is unexpected. We ex
 
 We start by adding a simple assumption in the rule. (We will later replace it with an assumption of an invariant, that will also assert that reaching max uint256 is infeasible.)
 
-## cvl rule inverses(uint key, uint value)
+# cvl rule inverses(uint key, uint value)
 
-uint max_uint = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF; require numOfKeys() &lt; max_uint; env e; insert(e, key, value); env e2; require e2.msg.value == 0; remove@withrevert(e2, key); bool removeSucceeded = !lastReverted; assert removeSucceeded, "remove after insert must succeed"; assert get(key) != value, "value of removed key must not be the inserted value";
+uint max_uint = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF; require numOfKeys() &lt; max_uint; env e;
 
-(don't forget to add numOfKeys to our envfree declarations!) Adding iteration
+insert(e, key, value); env e2; require e2.msg.value == 0; remove@withrevert(e2, key); bool removeSucceeded = !lastReverted; assert removeSucceeded, "remove after insert must succeed"; assert get(key) != value, "value of removed key must not be the inserted value";
+
+(don't forget to add numOfKeys to our envfree declarations!)
+
+Adding iteration
 
 Our goal in adding the keys variable was to allow iteration over the keys. We start with an extremely simple example, that sets all keys' values to 100:
 
-```cvl function iterate() external { for (uint i = 0 ; i &lt; keys.length ; i++) { uint key = keys[i]; doSomething(key, get(key)); } }
+cvl function iterate() external {
+for (uint i = 0 ; i &lt; keys.length ; i++) {
+uint key = keys[i];
+doSomething(key, get(key));
+}
+}
 
-function doSomething(uint key, uint value) virtual internal { map[key] = 100; } ```
+function doSomething(uint key, uint value) virtual internal {
+map[key] = 100;
+}
 
 We also want to add a basic check rule:
 
-## cvl rule checkIterate()
+# cvl rule checkIterate()
 
 env e; iterate(e); uint someKey; require contains(someKey); assert get(someKey) == 100;
 
@@ -188,7 +200,7 @@ Let's unpack what can be seen here. First, the length of the keys array is 1, an
 
 In mathematical terms, the invariant that our IterableMap contract should satisfy is:
 
-$$∀x.(map(x)≠0⟺∃i.0≤i≤keys.length∧keys[i]=x)$$
+∀x.(map(x)≠0⟺∃i.0≤i≤keys.length∧keys[i]=x)
 
 This invariant can be encoded directly in the spec file, as follows (for convenience we assume keys is public and has a getter):
 ---

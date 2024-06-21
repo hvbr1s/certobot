@@ -23,6 +23,7 @@ return super.getNowInternal();
 function powerOfTen(uint8 n) public pure returns (uint64){
 return uint64(uint64(10) ** n);
 }
+
 }
 for more details checkout the source code
 
@@ -49,15 +50,18 @@ ExampleHarnessingGetter(config) { }
 
 // External wrapper for accrueInternal
 function call_accrueInternal() external {
-}     return super.accrueInternal();
+return super.accrueInternal();
+}
 
 // External wrapper for getNowInternal
 function call_getNowInternal() external view returns (uint40) {
-}     return super.getNowInternal();
+return super.getNowInternal();
+}
 
 // Compute the n-th power of 10
 function powerOfTen(uint8 n) public pure returns (uint64){
-}     return uint64(uint64(10) ** n);
+return uint64(uint64(10) ** n);
+}
 
 }
 

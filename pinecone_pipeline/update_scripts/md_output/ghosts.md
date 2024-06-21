@@ -1,4 +1,4 @@
-## Verification With Ghosts
+# Verification With Ghosts
 
 (WIP)
 
@@ -8,7 +8,7 @@ $$∀x.(map(x)≠0⟺∃i.0≤i≤keys.length∧keys[i]=x)$$
 
 And we have already defined a ghost for the underlying map:
 
-cvl ghost mapping(uint => uint) _map;
+cvl ghost mapping(uint =&gt; uint) _map;
 
 with the hooks:
 
@@ -18,7 +18,7 @@ hook Sstore map[KEY uint k] uint v { _map[k] = v; }
 
 We continue with defining two additional ghosts: one capturing the length of the array, and the second for remembering the elements of the array:
 
-cvl ghost mapping(uint => uint) array; ghost uint arrayLen;
+cvl ghost mapping(uint =&gt; uint) array; ghost uint arrayLen;
 
 We also define the hooks. For array:
 

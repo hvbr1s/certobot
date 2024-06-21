@@ -9,8 +9,8 @@ load_dotenv()
 
 # Initialize Pinecone
 pinecone_key = os.environ['PINECONE_API_KEY']
-index_name = 'main'
-pc_host ="https://main-e865e64.svc.aped-4627-b74a.pinecone.io"
+index_name = 'certora'
+pc_host ="https://certora-b4d15e3.svc.aped-4627-b74a.pinecone.io"
 pc = Pinecone(api_key=pinecone_key)
 index = pc.Index(
         index_name,

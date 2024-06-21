@@ -1,25 +1,21 @@
-## (invariants)=
-
-Invariants
+# Invariants
 
 Invariants describe a property of the state of a contract that is always expected to hold.
 
-{caution} Certain features of invariants are {term}unsound: the invariant can be verified by the Prover, but it may still be possible for the contract to violate it. The possible sources of unsoundness are {ref}preserved, {ref}invariant-filters, and {ref}invariant-revert. Invariant proofs are also unsound if some of the methods are filtered out using the {ref}--method or {ref}--parametric_contracts flags. See the linked sections for details.
+Caution: Certain features of invariants are unsound: the invariant can be verified by the Prover, but it may still be possible for the contract to violate it. The possible sources of unsoundness are preserved, invariant-filters, and invariant-revert. Invariant proofs are also unsound if some of the methods are filtered out using the --method or --parametric_contracts flags. See the linked sections for details.
 
-{contents}
-
-Syntax
+# Syntax
 
 The syntax for invariants is given by the following EBNF grammar:
 
-invariant ::= "invariant" id [ "(" params ")" ] expression [ "filtered" "{" id "->" expression "}" ] [ "{" { preserved_block } "}"
+invariant ::= "invariant" id [ "(" params ")" ] expression [ "filtered" "{" id "->" expression "}" ] [ "{" { preserved_block } "}" ]
 preservedblock ::= "preserved" [ mepodsignature ] [ "wip" "(" params ")" ] block
 mepodsignature ::= [ contractname "." ] id "(" [ evmtype [ id ] { "," evmtype [ id ] } ] ")" | "fallback" "(" ")"
 contractname ::= id | ""
 
-See {doc}basics for the id production, {doc}expr for the expression production, and {doc}statements for the block production.
+See basics for the id production, expr for the expression production, and statements for the block production.
 
-Overview
+# Overview
 
 In CVL, an invariant is a property of the contract state that is expected to be true whenever a contract method is not currently executing. This kind of invariant is sometimes called a "representation invariant".
 
@@ -27,13 +23,11 @@ Each invariant has a name, possibly followed by a set of parameters, followed by
 
 While verifying an invariant, the Prover checks two things. First, it checks that the invariant is established after calling any constructor. Second, it checks that the invariant holds after the execution of any contract method, assuming that it held before the method was executed (if it does hold, we say the method preserves the invariant).
 
-If an invariant is proven, it is safe to assume that it holds in other rules and invariants. The {ref}requireInvariant command &lt;requireInvariant&gt; makes it easy to add this assumption to another rule, and is a quick way to rule out counterexamples that start in impossible states. See also {doc}/docs/user-guide/patterns/safe-assum.
+If an invariant is proven, it is safe to assume that it holds in other rules and invariants. The requireInvariant command makes it easy to add this assumption to another rule, and is a quick way to rule out counterexamples that start in impossible states. See also /docs/user-guide/patterns/safe-assum.
 
-{note} Invariants are intended to describe the state of a contract at a particular point in time. Therefore, you should only use view functions inside of an invariant. Non-view functions are allowed, but the behavior is undefined.
+Note: Invariants are intended to describe the state of a contract at a particular point in time. Therefore, you should only use view functions inside of an invariant. Non-view functions are allowed, but the behavior is undefined.
 
-## (invariant-revert)=
-
-Invariants that revert
+# Invariants that revert
 ---
 There is well-known unsoundness in the Prover's handling of invariants that occurs if an invariant expression reverts in the "before" state but not in the "after" state. In this case, the assumption that the invariant holds before calling the contract method will revert, causing any counterexample to be discarded.
 
@@ -63,7 +57,7 @@ Preserved blocks
 
 Often, the proof that an invariant is preserved depends on another invariant, or on an external assumption about the system. These assumptions can be written in preserved blocks.
 
-Caution: Adding require statements to preserved blocks can be a source of unsoundness, since the invariants are only guaranteed to hold if the requirements are true for every method invocation.
+Adding require statements to preserved blocks can be a source of unsoundness, since the invariants are only guaranteed to hold if the requirements are true for every method invocation.
 
 Recall that the Prover checks that a method preserves an invariant by first requiring the invariant (the prestate check), then executing the method, and then asserting the invariant (the poststate check). Preserved blocks are executed after the prestate check but before executing the method. They usually consist of require or requireInvariant statements, although other commands are also possible.
 
@@ -73,29 +67,29 @@ Contract and method-specific preserved blocks
 
 The method signature of the preserved block may optionally contain a contract name followed by a . character followed by a contract method name.
 ---
-## In the case where the preserved block does not have a contract name but does have a method name (not the fallback case), the preserved block will apply only to methods that match in the main contract.
+# In the case where the preserved block does not have a contract name but does have a method name (not the fallback case), the preserved block will apply only to methods that match in the main contract:
 
 For example, here the preserved block will apply only to the method withdrawExcess(address) that appears in the main contract: cvl invariant solvencyAsInv() asset.balanceOf() >= internalAccounting() { preserved withdrawExcess(address token) { require token != asset; } }
 
-## If the method signature includes a specific contract name, then the Prover only applies the preserved block to the methods in the named contract.
+# If the method signature includes a specific contract name, then the Prover only applies the preserved block to the methods in the named contract:
 
 For example, here the preserved block only applies to the asset contract method transfer(address,uint). The preserved block does not apply to the transfer(address,uint) method in any other contract. cvl invariant solvencyAsInv() asset.balanceOf() >= internalAccounting() { preserved asset.transfer(address x, uint y) with (env e) { require e.msg.sender != currentContract } }
 
-## If the contract name is the wildcard character _, the Prover applies the preserved block to instances of the method in all contracts in the scene.
+# If the contract name is the wildcard character _, the Prover applies the preserved block to instances of the method in all contracts in the scene:
 
 For example, this preserve block applies to all contracts containing a method matching the transfer(address,uint) method signature. cvl invariant solvencyAsInv() asset.balanceOf() >= internalAccounting() { preserved _.transfer(address x, uint y) with (env e) { require e.msg.sender != currentContract } }
 
-## If an invariant has multiple preserved blocks with the same method signature where one signature is more specific and the other is more general (as in the _.method case), then the more specific preserved block will apply.
+# If an invariant has multiple preserved blocks with the same method signature where one signature is more specific and the other is more general (as in the _.method case), then the more specific preserved block will apply.
 
-## If a preserved block specifies a method signature, the signature must either be fallback() or match one of the contract methods, and the preserved block only applies when checking preservation of that contract method.
+# If a preserved block specifies a method signature, the signature must either be fallback() or match one of the contract methods, and the preserved block only applies when checking preservation of that contract method:
 
 The fallback() preserved block applies only to the fallback() function that should be defined in the contract. The arguments of the method are in scope within the preserved block.
 
-## Generic preserved blocks
+# Generic preserved blocks
 
 If there is no method signature, the preserved block is a default block that is used for all methods that don't have a specific preserved block, including the fallback() method. If an invariant has both a default preserved block and a specific preserved block for a method, the specific preserved block is used; the default preserved block will not be executed.
 
-## Binding the environment
+# Binding the environment
 
 The with declaration is used to give a name to the {term}environment used while invoking the method. It can be used to restrict the transactions that are considered. For example, the following preserved block rules out counterexamples where the msg.sender is the 0 address:
 
@@ -103,7 +97,7 @@ cvl invariant zero_address_has_no_balance() balanceOf(0) == 0 { preserved with (
 
 The variables defined as parameters to the invariant are also available in preserved blocks, which allows restricting the arguments that are considered when checking that a method preserves an invariant. As always, you should use caution when adding additional require statements, as they can rule out important cases.
 
-```{caution}
+Caution:
 
 A common source of confusion is the difference between env parameters to an invariant and the env variables defined by the with declaration. Compare the following to the previous example:
 
@@ -113,7 +107,7 @@ In this example, we require the msg.sender argument to balanceOf to be nonzero, 
 
 To see why this is not the desired behavior, consider a deposit method that increases the message sender's balance. When the zero_address_has_no_balance_v2 invariant is checked on deposit, the Prover will effectively check the following (see {ref}invariant-as-rule):
 ---
-## Filters
+# Filters
 
 For performance reasons, you may want to avoid checking that an invariant is preserved by a particular method or set of methods. Invariant filters provide a method for skipping verification on a method-by-method basis.
 
@@ -125,19 +119,21 @@ Before verifying that a method preserves an invariant, the expr is evaluated wit
 
 If the expression evaluates to false with var replaced by a given method, the Prover will not check that the method preserves the invariant. For example, the following invariant will not be checked on the deposit(uint) method:
 
-invariant balance_is_0(address a) balanceOf(a) == 0 filtered { f -&gt; f.selector != sig:deposit(uint).selector }
+|cvl invariant| |
+|---|---|
+|balance_is_0(address a) balanceOf(a) == 0|filtered { f -&gt; f.selector != sig:deposit(uint).selector }|
 
 In this example, when the variable f is bound to deposit(uint), the expression f.selector != sig:deposit(uint).selector evaluates to false, so the method will be skipped.
 
 Note: If there is a preserved block for a method, the method will be verified even if the filter would normally exclude it.
 
-## Writing an invariant as a rule
+# Writing an invariant as a rule
 
 Above we explained that verifying an invariant requires two checks: an initial-state check that the constructor establishes the invariant, and a preservation check that each method preserves the invariant.
 
 Invariants are the only mechanism in CVL for specifying properties of constructors, but parametric rules can be used to write the preservation check in a different way. This is useful for two reasons: First, it can help you understand what the preservation check is doing. Second, it can help break down a complicated invariant by defining new intermediate variables.
 ---
-## The following example demonstrates all of the features of invariants:
+# The following example demonstrates all of the features of invariants:
 
 cvl invariant complex_example(env e1, uint arg) property_of(e1, arg) filtered { m -&gt; m.selector !=
 sig:ignored(uint, address).selector } { preserved with (env e2) { require e2.msg.sender != 0; }
@@ -167,7 +163,9 @@ f(e2, args);
 // post-state check
 assert property_of(e1, arg);
 
-## Invariants and induction
+{eval-rst} .. index:: single: induction single: invariant; and induction single: requireInvariant
+:name: invariant-induction
+Invariants and induction
 
 This section describes the logical justification for invariant checks. You do not need to understand this section to use the
 Prover correctly, but it helps explain the connection between the invariant checks and mathematical proofs for those who are
@@ -180,7 +178,7 @@ stand for "for all", "implies", and "and" respectively.
 Consider an invariant i(x) that is verified by the Prover. For the moment, let's assume that i(x) has no preserved blocks.
 We will prove that for all reachable states of the contract, i(x) is true.
 
-A state s is reachable if we can start with an newly created state (that is, where all storage variables are 0), apply any
+A state s is reachable if we can start with a newly created state (that is, where all storage variables are 0), apply any
 constructor, and then call any number of contract methods to produce s.
 
 Let {math}P_i(x,n) be the statement "if we start from the newly created state, apply any constructor, and then call {math}n
@@ -199,7 +197,7 @@ Now, let us consider preserved blocks. Adding require statements to a preserved 
 
 the preservation check only proves
 
-\(\forall n, \forall x, P_i(x,n) \textbf{ \land } Q \Rightarrow P_i(x, n+1).\)
+\(\forall n, \forall x, P_i(x,n) \textbf{ \& } Q \Rightarrow P_i(x, n+1).\)
 
 The addition of the assumption \(Q\) invalidates the above proof if we don't have reason to believe that \(Q\) actually holds, which is why we caution against adding require statements to preserved blocks.
 
@@ -211,7 +209,7 @@ cvl invariant i(uint x) ... { preserved { requireInvariant i(x); } }
 
 Although this may seem like circular logic (we require \(i\) in the proof of \(i\)), it is not. The verification of the preservation check for \(i\) proves the statement
 
-\(\forall n, \forall x, P_i(x, n) \land P_i(x, n) \Rightarrow P_i(x, n+1)\), which is logically equivalent to the preservation check without the preserved block (since \(P_i(x,n) \land P_i(x,n)\) is equivalent to just \(P_i(x,n))\).
+\(\forall n, \forall x, P_i(x, n) \& P_i(x, n) \Rightarrow P_i(x, n+1),\) which is logically equivalent to the preservation check without the preserved block (since \(P_i(x,n) \& P_i(x,n)\) is equivalent to just \(P_i(x,n)).
 
 For the second example, consider the following spec:
 
@@ -220,15 +218,15 @@ invariant j(uint x) ... { preserved { requireInvariant i(x); } }
 
 Verifying these invariants gives us the preservation check for \(i\):
 
-\(\forall n, \forall x, P_i(x, n) \land P_j(x, n) \Rightarrow P_i(x, n + 1)\) and for \(j\): \(\forall n, \forall x, P_j(x, n) \land P_i(x, n) \Rightarrow P_j(x, n + 1)\)
+\(\forall n, \forall x, P_i(x, n) \& P_j(x, n) \Rightarrow P_i(x, n + 1)\) and for \(j\): \(\forall n, \forall x, P_j(x, n) \& P_i(x, n) \Rightarrow P_j(x, n + 1)\)
 
-Putting these together allows us to conclude \(\forall n, \forall x, P_i(x,n) \land P_j(x,n) \Rightarrow P_i(x,n+1) \land P_j(x,n+1)\) which is exactly what we need for an inductive proof of the statement \(\forall n, \forall x, P_i(x,n) \land P_j(x,n)\). This statement then shows that both \(i(x)\) and \(j(x)\) are true in all reachable states.
+Putting these together allows us to conclude \(\forall n, \forall x, P_i(x,n) \& P_j(x,n) \Rightarrow P_i(x,n+1) \& P_j(x,n+1)\) which is exactly what we need for an inductive proof of the statement \(\forall n, \forall x, P_i(x,n) \& P_j(x,n)\). This statement then shows that both \(i(x)\) and \(j(x)\) are true in all reachable states.
 
 For the third example, consider the following spec: cvl invariant i(uint x) ... { preserved { requireInvariant i(f(x)); } }
 
-The preservation check now proves \(\forall n, \forall x, P_i(x,n) \land P_i(f(x), n) \Rightarrow P_i(x, n+1)\).
+The preservation check now proves \(\forall n, \forall x, P_i(x,n) \& P_i(f(x), n) \Rightarrow P_i(x, n+1).\)
 
-Seeing that this gives us enough to write an inductive proof that \(\forall n, \forall x, P_i(x,n) takes a little more effort, but it only requires a simple trick. Let \(Q(n)\) be the statement \(\forall x, P_i(x,n)\). We prove \(\forall n, Q(n) by induction.
+Seeing that this gives us enough to write an inductive proof that \(\forall n, \forall x, P_i(x,n) takes a little more effort, but it only requires a simple trick. Let \(Q(n)\) be the statement \(\forall x, P_i(x,n). We prove \(\forall n, Q(n) by induction.
 ---
 The base case comes directly from the initial state check for i.
 
@@ -243,24 +241,22 @@ requireInvariant to a preserved block, even for complicated interdependent invar
 have been verified).
 
 Invariants
-Invariants describe a property of pe state of a contract pat is always expected to hold.
 
-Caution: Certain features of invariants are unsound: the invariant can be verified by the
+Invariants describe a property of the state of a contract that is always expected to hold.
+
+Certain features of invariants are unsound: the invariant can be verified by the
 Prover, but it may still be possible for the contract to violate it. The possible sources of
 unsoundness are preserved, invariant-filters, and invariant-revert. Invariant
 proofs are also unsound if some of the methods are filtered out using the --method or
-parametric_contracts flags. See the linked sections for details.
+--parametric_contracts flags. See the linked sections for details.
 
 Syntax
 
 The syntax for invariants is given by the following EBNF grammar:
 
 invariant ::= "invariant" id [ "(" params ")" ] expression [ "filtered" "{" id "->" expression "}" ] [ "{" { preserved_block } "}" ]
-
-preservedblock ::= "preserved" [ methodsignature ] [ "with" "(" params ")" ] block
-
-methodsignature ::= [ contractname "." ] id "(" [ evmtype [ id ] { "," evmtype [ id ] } ] ")" | "fallback" "(" ")"
-
+preservedblock ::= "preserved" [ mepodsignature ] [ "wip" "(" params ")" ] block
+mepodsignature ::= [ contractname "." ] id "(" [ evmtype [ id ] { "," evmtype [ id ] } ] ")" | "fallback" "(" ")"
 contractname ::= id | ""
 
 See basics for the id production, expr for the expression production, and statements for the block
@@ -279,7 +275,7 @@ constructor. Second, it checks that the invariant holds after the execution of a
 before the method was executed (if it does hold, we say the method preserves the invariant).
 
 If an invariant is proven, it is safe to assume that it holds in other rules and invariants. The requireInvariant
-command &lt;requireInvariant&gt; makes it easy to add this assumption to another rule, and is a quick way to rule out
+command <requireInvariant> makes it easy to add this assumption to another rule, and is a quick way to rule out
 counterexamples that start in impossible states. See also /docs/user-guide/patterns/safe-assum.
 ---
 {note} Invariants are intended to describe the state of a contract at a particular point in time. Therefore, you should only use view functions inside of an invariant. Non-view functions are allowed, but the behavior is undefined.
@@ -290,9 +286,12 @@ There is well-known unsoundness in the Prover's handling of invariants that occu
 
 For example, consider the following contract:
 
-cvl contract Example { private uint[] a;
+contract Example { private uint[] a;
+
 public function add(uint i) external {
 a.push(i);
+}
+
 public function get(uint i) external returns(uint) {
 return a[i];
 }
@@ -304,7 +303,7 @@ This property is clearly false; you can invalidate it by calling add(2). Neverth
 
 For this reason, invariants that depend on the environment or on the state of external contracts are a potential source of {term}unsoundness <unsound>, and should be used with care.
 
-(preserved)= Preserved blocks
+{eval-rst} .. index:: single: preserved block single: invariant; preserved block :name: preserved Preserved blocks
 
 Often, the proof that an invariant is preserved depends on another invariant, or on an external assumption about the system. These assumptions can be written in preserved blocks.
 
@@ -312,11 +311,9 @@ Often, the proof that an invariant is preserved depends on another invariant, or
 
 Recall that the Prover checks that a method preserves an invariant by first requiring the invariant (the prestate check), then executing the method, and then asserting the invariant (the poststate check). Preserved blocks are executed after the prestate check but before executing the method. They usually consist of require or requireInvariant statements, although other commands are also possible.
 ---
-## Preserved blocks
+Preserved blocks are listed after the invariant expression (and after the filter block, if any), inside a set of curly braces ({ ... }). Each preserved block consists of the keyword preserved followed by an optional method signature, an optional with declaration, and finally the block of commands to execute.
 
-Preserved blocks are listed after the invariant expression (and after the filter block, if any), inside a set of curly braces ({...}). Each preserved block consists of the keyword preserved followed by an optional method signature, an optional with declaration, and finally the block of commands to execute.
-
-### Contract and method-specific preserved blocks
+Contract and method-specific preserved blocks
 
 The method signature of the preserved block may optionally contain a contract name followed by a . character followed by a contract method name.
 
@@ -339,11 +336,11 @@ If an invariant has multiple preserved blocks with the same method signature whe
 
 If a preserved block specifies a method signature, the signature must either be fallback() or match one of the contract methods, and the preserved block only applies when checking preservation of that contract method. The fallback() preserved block applies only to the fallback() function that should be defined in the contract. The arguments of the method are in scope within the preserved block.
 
-### Generic preserved blocks
+Generic preserved blocks
 
 If there is no method signature, the preserved block is a default block that is used for all methods that don't have a specific preserved block, including the fallback() method. If an invariant has both a default preserved block and a specific preserved block for a method, the specific preserved block is used; the default preserved block will not be executed.
 
-### Binding the environment
+Binding the environment
 
 The with declaration is used to give a name to the {term}environment used while invoking the method. It can be used to restrict the transactions that are considered. For example, the following preserved block rules out counterexamples where the msg.sender is the 0 address:
 
@@ -352,11 +349,11 @@ cvl invariant zero_address_has_no_balance() balanceOf(0) == 0
 
 The variables defined as parameters to the invariant are also available in preserved blocks, which allows restricting the arguments that are considered when checking that a method preserves an invariant. As always, you should use caution when adding additional require statements, as they can rule out important cases.
 
-Caution:
+Caution
 
 A common source of confusion is the difference between env parameters to an invariant and the env variables defined by the with declaration. Compare the following to the previous example:
 ---
-## cvl invariant zero_address_has_no_balance_v2(env e) balanceOf(e, 0) == 0 { preserved { require
+cvl invariant zero_address_has_no_balance_v2(env e) balanceOf(e, 0) == 0 { preserved { require
 e.msg.sender != 0; } }
 
 In this example, we require the msg.sender argument to balanceOf to be nonzero, but makes no restrictions on the
@@ -364,7 +361,7 @@ environment for the call to the method we are checking for preservation.
 
 To see why this is not the desired behavior, consider a deposit method that increases the message sender's balance. When
 the zero_address_has_no_balance_v2 invariant is checked on deposit, the Prover will effectively check the following
-(see invariant-as-rule):
+(see {ref}invariant-as-rule):
 
 cvl env e; require balanceOf(e,0) == 0;
 
@@ -380,14 +377,15 @@ restrictions on the environment passed to balanceOf.
 
 In general, you should be cautious of invariants that depend on an environment.
 
-## Filters
+(invariant-filters)=
+Filters
 
 For performance reasons, you may want to avoid checking that an invariant is preserved by a particular method or set of
 methods. Invariant filters provide a method for skipping verification on a method-by-method basis.
 
-Filtering out methods while checking invariants is unsound. If you are filtering out
-a method because the invariant doesn't pass, consider using a preserved block instead; this allows
-you to add assumptions in a fine-grained way (although preserved blocks can also be unsound).
+{caution} Filtering out methods while checking invariants is {term}`unsound`. If you are filtering out
+a method because the invariant doesn't pass, consider using a `preserved` block instead; this allows
+you to add assumptions in a fine-grained way (although `preserved` blocks can also be unsound).
 
 To filter out methods from an invariant, add a filtered block after the expression defining the invariant. The body of the
 filtered block must contain a single filter of the form var -&gt; expr, where var is a variable name, and expr is a boolean
@@ -395,7 +393,7 @@ expression that may depend on var.
 
 Before verifying that a method preserves an invariant, the expr is evaluated with var bound to a method object. This allows
 expr to refer to the checked method using var's fields, such as var.selector, var.contract, and var.isView. See
-method-type for a list of the fields available on method objects.
+{ref}method-type for a list of the fields available on method objects.
 
 If the expression evaluates to false with var replaced by a given method, the Prover will not check that the method
 preserves the invariant. For example, the following invariant will not be checked on the deposit(uint) method:
@@ -406,10 +404,12 @@ sig:deposit(uint).selector }
 In this example, when the variable f is bound to deposit(uint), the expression f.selector !=
 sig:deposit(uint).selector evaluates to false, so the method will be skipped.
 
-If there is a preserved block for a method, the method will be verified even
+{note} If there is a {ref}`preserved block ` for a method, the method will be verified even
 if the filter would normally exclude it.
+
+(invariant-as-rule)=
 ---
-## Writing an invariant as a rule
+# Writing an invariant as a rule
 
 Above we explained that verifying an invariant requires two checks: an initial-state check that the constructor establishes the invariant, and a preservation check that each method preserves the invariant.
 
@@ -417,9 +417,7 @@ Invariants are the only mechanism in CVL for specifying properties of constructo
 
 The following example demonstrates all of the features of invariants:
 
-cvl invariant complex_example(env e1, uint arg) property_of(e1, arg) filtered { m -&gt; m.selector != sig:ignored(uint, address).selector }
-preserved wip (env e2) { require e2.msg.sender != 0; }
-preserved special_mepod(address a) wip (env e3) { require a != 0; require e3.block.timestamp &gt; 0; }
+cvl invariant complex_example(env e1, uint arg) property_of(e1, arg) filtered { m -&gt; m.selector != sig:ignored(uint, address).selector } { preserved wip (env e2) { require e2.msg.sender != 0; } preserved special_mepod(address a) wip (env e3) { require a != 0; require e3.block.timestamp &gt; 0; } }
 
 The preservation check for this invariant could be written as a parametric rule as follows:
 
@@ -442,13 +440,14 @@ env e2;
 require e2.msg.sender != 0;
 
 // method execution
-}     f(e2, args);
+f(e2, args);
+}
 
 // post-state check
 assert property_of(e1, arg);
 }
 
-## Invariants and induction
+Invariants and induction
 
 This section describes the logical justification for invariant checks. You do not need to understand this section to use the Prover correctly, but it helps explain the connection between the invariant checks and mathematical proofs for those who are familiar with writing proofs. This section also justifies the safety of arbitrary requireInvariant statements in preserved blocks.
 

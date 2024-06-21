@@ -2,6 +2,37 @@
 <h1>Prover Release Notes</h1>
 <p><code>{contents}
 </code></p>
+<h2>7.6.3 (May 15, 2024)</h2>
+<h3>CVL</h3>
+<ul>
+<li>[feat] Allow the use of contract aliases (<code>using ERC20 as token</code>) that were defined in the imported spec files.</li>
+<li>[feat] Can use <code>filtered</code> expressions for <code>builtin</code> rules</li>
+<li>[bugfix] Always run <code>envfree</code> checks, even if rule filters are applied</li>
+<li>[bugfix] <code>envfree</code> will be checked on the code after linking</li>
+</ul>
+<h3>Rule Report</h3>
+<ul>
+<li>[feat] Support jump-to-source for calls, local variables, and storage accesses</li>
+<li>[feat] Show structs passed to CVL functions in the call trace</li>
+<li>[feat] Show loop statistics in the live difficulty tab</li>
+<li>[feat] Show split-solving progress in live stats</li>
+<li>[feat] Show a notification if there are unresolved calls that can be resolved with <code>--optimistic_fallback</code></li>
+<li>[feat] Show more info on procedures with nonlinear operations</li>
+<li>[UX] Prioritize <code>ERROR</code> states over other rule states</li>
+</ul>
+<h3>Performance</h3>
+<ul>
+<li>[feat] The <code>-splitParallel</code> option will now enable the new parallel splitter</li>
+</ul>
+<h3>CLI</h3>
+<ul>
+<li>[feat] Automatically set function-finder options depending on <code>solc</code> version and configuration</li>
+<li>[feat] New option <code>--build_cache</code> for faster re-compilation of previously compiled Solidity code</li>
+</ul>
+<h3>Misc.</h3>
+<ul>
+<li>[feat] Support for <code>MCOPY</code> EVM instruction</li>
+</ul>
 <h2>7.3.0 (April 11, 2024)</h2>
 <h3>CVL</h3>
 <ul>
@@ -527,17 +558,49 @@ struct MyComplexStruct {
 <li>Improved console output</li>
 <li>Improved call resolution output</li>
 </ul>
-<html><head><meta content="https://github.com/Certora/Documentation/blob/master/prover/changelog/prover_changelog.md" name="url"/><meta content="No Title Found" name="title"/><meta content="(prover-release-notes)=
+<html><head><meta content="https://github.com/Certora/Documentation/prover/changelog/prover_changelog.md" name="url"/><meta content="No Title Found" name="title"/><meta content="(prover-release-notes)=
 Prover Release Notes
 {contents}
 
-7.3.0 (April 11, 2024)
+7.6.3 (May 15, 2024)
 CVL
 
-[feat] An option to make autofinders for internal functions less likely to cause compilation failures, --use_memory" name="text"/></head><body><p>(prover-release-notes)=</p>
+[feat] Allow the use of contract aliases (using ERC20 as token) that were defined in the imported spec files.
+[feat] " name="text"/></head><body><p>(prover-release-notes)=</p>
 <h1>Prover Release Notes</h1>
 <p><code>{contents}
 </code></p>
+<h2>7.6.3 (May 15, 2024)</h2>
+<h3>CVL</h3>
+<ul>
+<li>[feat] Allow the use of contract aliases (<code>using ERC20 as token</code>) that were defined in the imported spec files.</li>
+<li>[feat] Can use <code>filtered</code> expressions for <code>builtin</code> rules</li>
+<li>[bugfix] Always run <code>envfree</code> checks, even if rule filters are applied</li>
+<li>[bugfix] <code>envfree</code> will be checked on the code after linking</li>
+</ul>
+<h3>Rule Report</h3>
+<ul>
+<li>[feat] Support jump-to-source for calls, local variables, and storage accesses</li>
+<li>[feat] Show structs passed to CVL functions in the call trace</li>
+<li>[feat] Show loop statistics in the live difficulty tab</li>
+<li>[feat] Show split-solving progress in live stats</li>
+<li>[feat] Show a notification if there are unresolved calls that can be resolved with <code>--optimistic_fallback</code></li>
+<li>[feat] Show more info on procedures with nonlinear operations</li>
+<li>[UX] Prioritize <code>ERROR</code> states over other rule states</li>
+</ul>
+<h3>Performance</h3>
+<ul>
+<li>[feat] The <code>-splitParallel</code> option will now enable the new parallel splitter</li>
+</ul>
+<h3>CLI</h3>
+<ul>
+<li>[feat] Automatically set function-finder options depending on <code>solc</code> version and configuration</li>
+<li>[feat] New option <code>--build_cache</code> for faster re-compilation of previously compiled Solidity code</li>
+</ul>
+<h3>Misc.</h3>
+<ul>
+<li>[feat] Support for <code>MCOPY</code> EVM instruction</li>
+</ul>
 <h2>7.3.0 (April 11, 2024)</h2>
 <h3>CVL</h3>
 <ul>

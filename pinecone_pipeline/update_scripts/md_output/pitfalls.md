@@ -1,4 +1,4 @@
-## Common Pitfalls
+# Common Pitfalls
 
 Vacuity
 
@@ -40,7 +40,7 @@ There are cases where we can evaluate bar() either before or after foo(). In the
 
 cvl rule good2 { bool barHolds = bar(); foo(); assert barHolds => lastReverted; }
 ---
-## Common Pitfalls
+# Common Pitfalls
 
 Vacuity
 

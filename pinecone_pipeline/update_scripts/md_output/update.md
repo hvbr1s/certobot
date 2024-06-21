@@ -1,4 +1,4 @@
-## Syntax Update: Ghost Variables and Ghost Mappings
+# Syntax Update: Ghost Variables and Ghost Mappings
 
 Variable-style declarations
 
