@@ -47,7 +47,6 @@ class Query(BaseModel):
     user_locale: str | None = None
     platform: str | None = None
 
-
 # Initialize app
 app = FastAPI()
 
@@ -64,7 +63,6 @@ async def agent(task):
     print(f"Processing task-> {task}")
     response = crew.kickoff(inputs={"topic": task})
     return response
-
 
 # Initialize user state and periodic cleanup function
 USER_STATES = {}
@@ -279,7 +277,6 @@ Final Output: {cleaned_response}
         print(f"Something went wrong: {e}")
         return{"output": "Sorry, something went wrong, please try again!"}
     
-
 # UI
 templates = Jinja2Templates(directory="templates")
 @app.get("/", response_class=HTMLResponse)
