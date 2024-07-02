@@ -226,7 +226,7 @@ async def simple_retrieve(user_input):
                         "model": reranker_main,
                         "query": user_input, 
                         "documents": docs, 
-                        "top_n": 2,
+                        "top_n": 3,
                         "return_documents": True,
 
                     },

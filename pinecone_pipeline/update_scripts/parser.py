@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 import logging
 import json
 import time
+from bs4 import BeautifulSoup
 
 # Setup basic logging
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -16,9 +17,17 @@ load_dotenv()
 CONFIG = {
     "api_base_url": os.getenv('API_BASE_URL', 'https://api.cloud.llamaindex.ai/api/parsing'),
     "api_key": os.getenv('LLAMA_PARSE_KEY'),
-    "input_dir": os.getenv('INPUT_DIR', '/home/dan/certorabot/pinecone_pipeline/update_scripts/html_output'),
-    "output_dir": os.getenv('OUTPUT_DIR', '/home/dan/certorabot/pinecone_pipeline/update_scripts/md_output'),
+    "input_dir": os.getenv('INPUT_DIR', '/Users/danieljaheny/Documents/dev/certobot/pinecone_pipeline/update_scripts/html_output'),
+    "output_dir": os.getenv('OUTPUT_DIR', '/Users/danieljaheny/Documents/dev/certobot/pinecone_pipeline/update_scripts/md_output'),
 }
+
+def extract_source_url(html_file):
+    with open(html_file, 'r', encoding='utf-8') as f:
+        soup = BeautifulSoup(f, 'html.parser')
+        meta_source = soup.find('meta', attrs={'name': 'source'})
+        if meta_source:
+            return meta_source.get('content')
+    return None
 
 def upload_file_and_get_job_id(file_path):
     url = f"{CONFIG['api_base_url']}/upload"
@@ -59,7 +68,7 @@ def check_job_status(job_id):
         logging.error(f"Failed to decode JSON response for job {job_id}. Response text: {response.text}")
         return 'FAILED'
 
-def download_result(job_id, output_path):
+def download_result(job_id, output_path, source_url):
     url = f"{CONFIG['api_base_url']}/job/{job_id}/result/markdown"
     headers = {
         'accept': 'application/json',
@@ -70,8 +79,13 @@ def download_result(job_id, output_path):
         response_json = response.json()
         markdown_content = response_json.get('markdown', '')  # Extract markdown content
         if markdown_content:
-            with open(output_path, 'w') as output_file:
+            # Create the output directory if it doesn't exist
+            os.makedirs(os.path.dirname(output_path), exist_ok=True)
+            
+            with open(output_path, 'w', encoding='utf-8') as output_file:
                 output_file.write(markdown_content)
+                if source_url:
+                    output_file.write(f"\n\nSource: {source_url}\n")
             logging.info(f"Markdown result for job {job_id} written to {output_path}")
         else:
             logging.error(f"No markdown content found for job {job_id}")
@@ -82,17 +96,18 @@ def process_files():
     html_files = glob.glob(os.path.join(CONFIG['input_dir'], "*.html"))
     for html_file in html_files:
         logging.debug(f"Processing file {html_file}")
+        source_url = extract_source_url(html_file)
         job_id = upload_file_and_get_job_id(html_file)
         if job_id:
             logging.info(f"Submitted job {job_id} for file {html_file}")
             status = check_job_status(job_id)
             while status == 'PENDING':
-                logging.info(f"Job {job_id} is still processing. Current status: {status}. Waiting for 20 seconds.")
-                time.sleep(20)
+                logging.info(f"Job {job_id} is still processing. Current status: {status}. Waiting for 5 seconds.")
+                time.sleep(10)
                 status = check_job_status(job_id)
             if status == 'SUCCESS':
                 result_path = os.path.join(CONFIG['output_dir'], os.path.basename(html_file).replace('.html', '.md'))
-                download_result(job_id, result_path)
+                download_result(job_id, result_path, source_url)
             elif status in ['FAILED', 'NOT FOUND']:
                 logging.error(f"Job {job_id} failed or not found. Status: {status}")
         else:

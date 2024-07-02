@@ -27,20 +27,30 @@ class Document:
         }
 
 def load_md_file(file_path):
-    file_name = Path(file_path).stem  # Use stem to get the file name without extension
+    file_name = Path(file_path).stem
     print(f'File name: {file_name}')
     with open(file_path, "r", encoding="utf-8") as f:
         content = f.read()
 
-    # Use the file name as the title
+    # Extract the source URL from the last line
+    lines = content.split('\n')
+    source_url = 'https://docs.certora.com/en/latest/'  # Default source
+    if lines and lines[-1].startswith('Source:'):
+        source_url = lines[-1].strip()[7:]  # Remove 'Source:' prefix
+        # Add '/tree/master/docs/' to the source URL
+        if 'github.com/Certora/Documentation/' in source_url:
+            parts = source_url.split('github.com/Certora/Documentation/')
+            source_url = f"{parts[0]}github.com/Certora/Documentation/tree/master/docs/{parts[1]}"
+        content = '\n'.join(lines[:-1])  # Remove the source line from content
+
     title = file_name.upper()
+    metadata = {
+        'title': f'#TITLE: {title}.#',
+        'source': source_url,
+        'source-type': 'documentation'
+    }
 
-    # No HTML metadata to extract, so we create an empty dictionary
-    metadata = {'title': f'#TITLE: {title}.#'}
-
-    # The text is the content of the markdown file
     text_without_tags = content
-    # Collapse any instances of multiple whitespaces down to a single whitespace
     text_with_collapsed_whitespace = re.sub(r'\s+', ' ', text_without_tags)
     return Document(page_content=text_with_collapsed_whitespace, metadata=metadata)
 
@@ -119,9 +129,9 @@ def run_chunker(output_directory_path: str = None, chunk_size: int = 512, chunk_
                 for i, chunk in enumerate(chunks):
                     chunk_text = chunk.page_content  # Extract text from the Document object
                     entry = {
-                        'source': doc.metadata.get('source', 'https://docs.certora.com/en/latest/'),
-                        'source-type': doc.metadata.get('source-type', 'documentation'),
-                        'title': doc.metadata.get('title', ''),
+                        'source': doc.metadata['source'],
+                        'source-type': doc.metadata['source-type'],
+                        'title': doc.metadata['title'],
                         'id': f'{uid}-{i}',
                         'chunk-uid': uid,
                         'chunk-page-index': i,
@@ -144,4 +154,3 @@ def run_chunker(output_directory_path: str = None, chunk_size: int = 512, chunk_
 
 if __name__ == "__main__":
     run_chunker(chunk_size=512)
-
