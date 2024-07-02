@@ -1,6 +1,6 @@
 import os
 from dotenv import main
-from system.prompts import INVESTIGATOR_PROMPT
+from system.prompts import INVESTIGATOR_PROMPT, SECURITY_RESEARCHER_PROMPT 
 from tools.retrieve_tool import simple_retrieve
 from fastapi.security import APIKeyHeader
 from fastapi import FastAPI, HTTPException, Depends
@@ -15,6 +15,7 @@ from pydantic import BaseModel
 from openai import AsyncOpenAI
 from dotenv import main
 from datetime import datetime
+from anthropic import AsyncAnthropic
 import json
 import asyncio
 import time
@@ -36,14 +37,8 @@ openai_key = os.environ['OPENAI_API_KEY']
 openai_client = AsyncOpenAI(api_key=openai_key)
 gpt = 'gpt-4-turbo'
 
-# Initialize Groq client
-from groq import Groq
-groq_client = Groq(
-    api_key=os.environ["GROQ_API_KEY"],
-)
-llama = 'llama3-8b-8192'
-
-
+# Initialize Anthropic client
+anthropic_client = AsyncAnthropic(api_key=os.environ['CLAUDE_API_KEY'])
 
 # Define query class
 class Query(BaseModel):
@@ -125,6 +120,20 @@ TOOLS = [
 }
 ]
 
+async def claude_research(issue):
+
+    response = await anthropic_client.messages.create(
+                    max_tokens=2048,
+                    model="claude-3-5-sonnet-20240620",
+                    system=SECURITY_RESEARCHER_PROMPT,
+                    temperature=0.0,
+                    messages=[
+                        {"role": "user", "content": issue}
+                    ]
+    )
+    claude_says =  response.content[0].text
+    return claude_says
+
 async def chat(chat):
     # Define the initial messages with the system's instructions
     messages = [
@@ -163,35 +172,39 @@ async def ragchat(user_id, chat_history):
 
         ##### OpenAI #####
         # Set clock
-        #timestamp = datetime.now().strftime("%B %d, %Y")
-        # retrieved_context = await simple_retrieve(function_call_query)
-        # retrieved_context =  res = await agent(function_call_query)
-        # troubleshoot_instructions = "CONTEXT: " + "\n" + timestamp + " ." + retrieved_context + "\n\n" + "----" + "\n\n" + "ISSUE: " + "\n" + function_call_query
+        timestamp = datetime.now().strftime("%B %d, %Y")
+        retrieved_context = await simple_retrieve(function_call_query)
+        # retrieved_context =  await agent(function_call_query)
+        troubleshoot_instructions = "CONTEXT: " + "\n" + timestamp + " ." + retrieved_context + "\n\n" + "----" + "\n\n" + "ISSUE: " + "\n" + function_call_query
 
-        # try:
-        #         res = await openai_client.chat.completions.create( #with OpenAI
-        #         #res = groq_client.chat.completions.create( #with Llama3
-        #             temperature=0.0,
-        #             model=gpt,
-        #             messages=[
+        try:
+                #### OpenAI Researcher ####
+                #print('Calling GPT researcher')
+                # response = await openai_client.chat.completions.create( 
+                #     temperature=0.0,
+                #     model=gpt,
+                #     messages=[
 
-        #                 {"role": "system", "content": SALES_ASSISTANT_PROMPT },
-        #                 {"role": "user", "content": troubleshoot_instructions}
+                #         {"role": "system", "content": SECURITY_RESEARCHER_PROMPT },
+                #         {"role": "user", "content": troubleshoot_instructions}
 
-        #             ],
-        #             timeout= 45.0
-        #         )
-        #         new_reply = res.choices[0].message.content
-        #         print(f"Query processed succesfully!")
+                #     ],
+                #     timeout= 45.0
+                # )
+                # res = response.choices[0].message.content
+
+                #### Claude Researcher ####
+                print('Calling Claude researcher')
+                res = await claude_research(issue=troubleshoot_instructions)
+                print(f"Query processed succesfully! -> {res}")
       
         ######  CrewAI  #######
 
-        try:
+        # try:
 
-            res = await agent(function_call_query) # use CrewAI
-            print(res)
-            #new_reply = res.choices[0].message.content  
-            print(f"Query processed succesfully!")
+        #     res = await agent(function_call_query) # use CrewAI
+        #     print(res)
+        #     print(f"Query processed succesfully!")
         
         except Exception as e:
                 print(f"OpenAI completion failed: {e}")
@@ -199,14 +212,14 @@ async def ragchat(user_id, chat_history):
 
         USER_STATES[user_id]['previous_queries'][-1]['assistant'] = res
 
-        return res
+        return res, retrieved_context
     
     # Extract reply content
     elif res.choices[0].message.content is not None:
         reply = res.choices[0].message.content
         USER_STATES[user_id]['previous_queries'][-1]['assistant'] = reply
 
-        return reply
+        return reply, retrieved_context
     
 
 # RAGChat route
@@ -240,7 +253,7 @@ async def react_description(query: Query): # test route
     try:
 
         # Start RAG
-        response = await ragchat(user_id, chat_history)
+        response, docs = await ragchat(user_id, chat_history)
         print(f'Response received-> {response}')     
 
         #Clean response
@@ -251,6 +264,7 @@ async def react_description(query: Query): # test route
 ----------------{f"User ID: {user_id}"}----------------
 Full query: {query}
 Concise query: {user_input}
+Documents: {docs}
 Chat history: {formatted_history.strip()}
 Final Output: {cleaned_response}
 ---------------------------------------

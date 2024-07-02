@@ -292,5 +292,5 @@ async def simple_retrieve(user_input):
             augmented_contexts = "Сегодня: " + timestamp + "\n\n" + "\n\n".join(contexts)
         else:
             augmented_contexts = "Today is: " + timestamp + "\n\n" + "\n\n".join(contexts)
-
+    print(f'Retrieved documents->\n {augmented_contexts}')
     return augmented_contexts

@@ -19,7 +19,7 @@ groq =  ChatGroq(
 
 # Creating a senior researcher agent with memory and verbose mode
 researcher = Agent(
-  role='Senior Researcher',
+  role='Senior Security Researcher',
   goal='ALWAYS use your Knowledge Base tools to find solutions to technical questions about Ledger products.',
   verbose=True,
   memory=False,
