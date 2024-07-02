@@ -156,7 +156,8 @@ async def chat(chat):
     return res
 
 async def ragchat(user_id, chat_history):
-
+    
+    retrieved_context = None
     res = await chat(chat_history)
 
     # Check for tool_calls in the response
@@ -172,6 +173,7 @@ async def ragchat(user_id, chat_history):
         # Set clock
         timestamp = datetime.now().strftime("%B %d, %Y")
         retrieved_context = await simple_retrieve(function_call_query)
+        print(f'Retrieved context-> {retrieved_context}')
         # retrieved_context =  await agent(function_call_query)
         troubleshoot_instructions = "CONTEXT: " + "\n" + timestamp + " ." + retrieved_context + "\n\n" + "----" + "\n\n" + "ISSUE: " + "\n" + function_call_query
 
@@ -194,7 +196,7 @@ async def ragchat(user_id, chat_history):
                 #### Claude Researcher ####
                 print('Calling Claude researcher')
                 res = await claude_research(issue=troubleshoot_instructions)
-                print(f"Query processed succesfully! -> {res}")
+                print(f"Query processed successfully! -> {res}")
       
         ######  CrewAI  #######
 
@@ -228,6 +230,7 @@ async def react_description(query: Query): # test route
     # Deconstruct incoming query
     user_id = query.user_id
     user_input = query.user_input.strip()
+    print(f'Received query -> {user_input}')
     # locale = query.locale if query.locale else "eng"
 
     # Create a conversation history for new users
