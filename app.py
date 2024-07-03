@@ -8,7 +8,6 @@ from crew.agents import researcher
 from tasks.list import research_issue
 from crewai import Crew, Process
 from fastapi.templating import Jinja2Templates
-from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
 from fastapi import Request
 from pydantic import BaseModel

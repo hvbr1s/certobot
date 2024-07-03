@@ -35,13 +35,13 @@ def load_md_file(file_path):
     # Extract the source URL from the last line
     lines = content.split('\n')
     source_url = 'https://docs.certora.com/en/latest/'  # Default source
-    if lines and lines[-1].startswith('Source:'):
-        source_url = lines[-1].strip()[7:]  # Remove 'Source:' prefix
+    if lines and lines[-2].startswith('Source:'):
+        source_url = lines[-2].strip()[7:]  # Remove 'Source:' prefix
         # Add '/tree/master/docs/' to the source URL
         if 'github.com/Certora/Documentation/' in source_url:
             parts = source_url.split('github.com/Certora/Documentation/')
             source_url = f"{parts[0]}github.com/Certora/Documentation/tree/master/docs/{parts[1]}"
-        content = '\n'.join(lines[:-1])  # Remove the source line from content
+        content = '\n'.join(lines[:-2])  # Remove the source line from content
 
     title = file_name.upper()
     metadata = {

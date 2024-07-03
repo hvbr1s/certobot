@@ -34,7 +34,7 @@ def run_updater(json_file_path:str = None):
     pinecone_pipeline_root_directory = os.path.dirname(os.path.dirname(__file__))
     output_folder = os.path.join(pinecone_pipeline_root_directory, 'output_files')
     if not json_file_path:
-        json_file_path = '/Users/danieljaheny/Documents/dev/certobot/pinecone_pipeline/update_scripts/output.json'
+        json_file_path = '/home/dan/certorabot/pinecone_pipeline/update_scripts/output.json'
     documents = read_json_file(json_file_path)
     
     # Define batch size

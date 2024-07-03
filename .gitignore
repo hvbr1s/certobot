@@ -1,5 +1,5 @@
 .env
-__pychache__/
+**/__pychache__/
 crew_callback_logs.txt
 venvcertobot/
 pinecone_pipeline/bytebot/
