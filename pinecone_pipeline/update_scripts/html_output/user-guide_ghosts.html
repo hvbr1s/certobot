@@ -1,0 +1,120 @@
+<p>(tracking-changes)=</p>
+<h1>Tracking changes with ghosts and hooks</h1>
+<p>Sometimes it is useful for a rule to observe changes to a particular part of
+storage, or otherwise track the behavior of a contract while it is executing.
+For example, while verifying an ERC20 contract, we may want to observe each
+update to any user balance so that we can keep our own running tally of the
+total supply.</p>
+<p>{ref}<code>Ghosts &lt;ghost-variables&gt;</code> and {ref}<code>hooks &lt;hooks&gt;</code> are designed for this
+purpose.  Ghosts are additional variables that you can add to use during
+verification.  They are similar to contract storage variables — they are
+rolled back when a contract function reverts or when the storage is reset.</p>
+<p>Hooks are blocks of CVL code that get executed when a contract performs a
+certain instruction.  For example, a store hook will be run whenever the
+contract updates a storage variable, while a call hook will be run whenever the
+contract makes an external call.</p>
+<p>Together, hooks and ghosts let you keep track of what the contract does during
+execution.</p>
+<p><code>{todo}
+This section is incomplete.  For references, see:
+ - The "Ghosts and hooks" lectures from the {ref}`stanford` and {ref}`paris` workshops
+ - {ref}`ghost-variables` and {ref}`hooks` in the reference manual
+</code></p>
+<p>% TODO: DOC-353
+%
+% This guide works through some common examples of using ghosts and
+% hooks to monitor contracts.  For full details see the reference manual on
+% {ref}<code>hooks &lt;hooks&gt;</code> and {ref}<code>ghosts &lt;ghosts&gt;</code>.
+% 
+% <code>{contents}
+%</code>
+% 
+% ## Running example
+% 
+% <code>{todo}
+%  - ERC 20
+%  - Offline signed transaction feature
+%</code>
+% 
+% ## Using store hooks to track sums 
+% 
+% <code>{todo}
+% The usual thing
+%  - `sumOfBalances` ghost
+%  - changes hook
+%  - `totalSupplyIsSumOfBalances`
+%  - `init_state` axiom
+% 
+% Caveats
+%  - The Prover doesn't know `sumOfBalances` is the sum; can't relate sum of balances
+%    to individual balances (sum of two balances example)
+%</code>
+% 
+% ## Using load hooks to TODO
+% 
+% <code>{todo}
+% Use an invariant about the total supply maybe?
+%</code>
+% </p>
+<html><head><meta content="https://github.com/Certora/Documentation/user-guide/ghosts.md" name="source"/><meta content="https://github.com/Certora/Documentation/user-guide/ghosts.md" name="url"/><meta content="No Title Found" name="title"/><meta content="(tracking-changes)=
+Tracking changes with ghosts and hooks
+Sometimes it is useful for a rule to observe changes to a particular part of
+storage, or otherwise track the behavior of a contract while it " name="text"/></head><body><div style="background-color: #f0f0f0; padding: 10px; margin-bottom: 20px;">Source: https://github.com/Certora/Documentation/user-guide/ghosts.md</div><p>(tracking-changes)=</p>
+<h1>Tracking changes with ghosts and hooks</h1>
+<p>Sometimes it is useful for a rule to observe changes to a particular part of
+storage, or otherwise track the behavior of a contract while it is executing.
+For example, while verifying an ERC20 contract, we may want to observe each
+update to any user balance so that we can keep our own running tally of the
+total supply.</p>
+<p>{ref}<code>Ghosts &lt;ghost-variables&gt;</code> and {ref}<code>hooks &lt;hooks&gt;</code> are designed for this
+purpose.  Ghosts are additional variables that you can add to use during
+verification.  They are similar to contract storage variables — they are
+rolled back when a contract function reverts or when the storage is reset.</p>
+<p>Hooks are blocks of CVL code that get executed when a contract performs a
+certain instruction.  For example, a store hook will be run whenever the
+contract updates a storage variable, while a call hook will be run whenever the
+contract makes an external call.</p>
+<p>Together, hooks and ghosts let you keep track of what the contract does during
+execution.</p>
+<p><code>{todo}
+This section is incomplete.  For references, see:
+ - The "Ghosts and hooks" lectures from the {ref}`stanford` and {ref}`paris` workshops
+ - {ref}`ghost-variables` and {ref}`hooks` in the reference manual
+</code></p>
+<p>% TODO: DOC-353
+%
+% This guide works through some common examples of using ghosts and
+% hooks to monitor contracts.  For full details see the reference manual on
+% {ref}<code>hooks &lt;hooks&gt;</code> and {ref}<code>ghosts &lt;ghosts&gt;</code>.
+% 
+% <code>{contents}
+%</code>
+% 
+% ## Running example
+% 
+% <code>{todo}
+%  - ERC 20
+%  - Offline signed transaction feature
+%</code>
+% 
+% ## Using store hooks to track sums 
+% 
+% <code>{todo}
+% The usual thing
+%  - `sumOfBalances` ghost
+%  - changes hook
+%  - `totalSupplyIsSumOfBalances`
+%  - `init_state` axiom
+% 
+% Caveats
+%  - The Prover doesn't know `sumOfBalances` is the sum; can't relate sum of balances
+%    to individual balances (sum of two balances example)
+%</code>
+% 
+% ## Using load hooks to TODO
+% 
+% <code>{todo}
+% Use an invariant about the total supply maybe?
+%</code>
+% </p>
+</body></html>

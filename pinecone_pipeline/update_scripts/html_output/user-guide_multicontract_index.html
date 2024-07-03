@@ -1,0 +1,1067 @@
+<p><code>{eval-rst}
+.. role:: cvl(code)
+   :language: cvl
+</code></p>
+<h1>Working with Multiple Contracts</h1>
+<p>In the previous chapter, we focused on rules describing the behavior of a
+single contract.  In practice, most protocols consist of multiple interacting
+contracts.  In this chapter, we discuss techniques for verifying protocols
+involving multiple contracts.</p>
+<p>We begin by walking through a running example protocol and explaining the
+Prover's default behavior when it encounters calls from one contract to
+another.  We then show how to handle a protocol consisting of multiple
+contracts whose implementation is known.  After that, we discuss dispatcher
+summaries, an important technique for handling contracts whose implementation
+is not known at verification time.  Finally, we give a concrete and reusable
+setup for a very common case: a contract that can work with many different ERC20
+implementations.</p>
+<p>The entire running example for this chapter can be found {clink}<code>here&lt;/DEFI/LiquidityPool/&gt;</code>.</p>
+<p><code>{contents}
+</code></p>
+<h2>Example protocol</h2>
+<p>To demonstrate these concepts, we work with a simplified liquidity pool contract called
+{clink}<code>Pool&lt;/DEFI/LiquidityPool/contracts/Pool.sol&gt;</code>.
+The {clink}<code>full specification&lt;/DEFI/LiquidityPool/certora/specs/Full.spec&gt;</code> is in
+<code>certora/specs/Full.spec</code> (although this chapter only discusses the
+<code>integrityOfDeposit</code> and <code>flashLoanIncreasesBalance</code> properties) and the
+{clink}<code>final run conf&lt;/DEFI/LiquidityPool/runFullPool.conf&gt;</code> is in <code>runFullPool.conf</code>.</p>
+<p>The liquidity pool allows users to deposit and withdraw a single fixed type of
+ERC20 token (the <code>asset</code>). The liquidity pool itself is an ERC20 token and
+balance in the liquidity pool token denotes the <em>shares</em> in the pool.
+We'll reserve the words <em>amount</em> and <em>assets</em> to denote balance in the <code>asset</code>.
+So, in return for depositing <em>assets</em> the user receives <em>shares</em> in the pool.
+Withdrawing decreases the user's shares and increases the user' assets.</p>
+<p>Here is the interface for the pool, followed by the Pool's code.</p>
+<p><code>{eval-rst}
+.. literalinclude:: ../../../Examples/DEFI/LiquidityPool/contracts/IPool.sol
+   :language: solidity
+   :caption: :clink:`IPool interface&lt;/DEFI/LiquidityPool/contracts/IPool.sol&gt;`
+</code></p>
+<p>``<code>{eval-rst}
+.. dropdown:: :clink:</code>Pool.sol `</p>
+<p>.. literalinclude:: ../../../Examples/DEFI/LiquidityPool/contracts/Pool.sol
+      :language: solidity
+```</p>
+<p>For demonstration purposes, we have also added function <code>assetBalance</code>, which
+returns the pool's balance of the underlying asset (we'll see
+{ref}<code>later &lt;using-example&gt;</code> that this is not necessary):</p>
+<p><code>{eval-rst}
+.. literalinclude:: ../../../Examples/DEFI/LiquidityPool/contracts/Pool.sol
+   :language: solidity
+   :caption: :clink:`assetBalance&lt;/DEFI/LiquidityPool/contracts/IPool.sol&gt;`
+   :lines: 82-84
+</code></p>
+<p>Users can also take out <em>flash loans</em> - loans that must be repaid within the same
+transaction.  To do so, the user calls <code>flashLoan</code>, passing in a
+<code>FlashLoanReceiver</code> contract and the desired number of tokens.  The <code>flashLoan</code>
+method transfers the tokens to the receiver, calls the <code>executeOperation</code>
+method on the receiver, and finally transfers the tokens (plus a fee) from the
+receiver back to the pool:</p>
+<p><code>{eval-rst}
+.. literalinclude:: ../../../Examples/DEFI/LiquidityPool/contracts/Pool.sol
+   :language: solidity
+   :caption: :clink:`flashLoan&lt;/DEFI/LiquidityPool/contracts/IPool.sol&gt;`
+   :lines: 67-76
+</code></p>
+<p>Our goal is to prove properties about the <code>Pool</code> contract, but we will need to
+interact with the entire combined protocol consisting of the <code>Pool</code> contract,
+the <code>Asset</code> contract, and the <code>FlashLoanReceiver</code> contracts.  We will begin by
+explaining the default behavior of the Prover when making external calls to
+unknown contracts.  We will then show how to link the specific <code>Asset</code> contract
+implementation to the <code>Pool</code> contract. Finally, we will show some techniques
+for reasoning about the open-ended set of possible <code>FlashLoanReceiver</code>
+implementations.</p>
+<h2>Handling unresolved method calls</h2>
+<p>To start, let's write a basic property of the pool and run the Prover on the
+<code>Pool</code> contract to see how it handles calls to unknown code.</p>
+<p>Here is a simple property:</p>
+<p><code>{eval-rst}
+.. cvlinclude:: ../../../Examples/DEFI/LiquidityPool/certora/specs/pool_havoc.spec
+   :cvlobject: integrityOfDeposit
+   :caption: :clink:`integrityOfDeposit&lt;/DEFI/LiquidityPool/certora/specs/pool_havoc.spec&gt;`
+</code></p>
+<p>This rule makes a call to <code>Pool.deposit(...)</code>, which in turn makes a call to
+<code>asset.transferFrom(...)</code>; to understand the behavior of <code>deposit</code> the Prover
+must also reason about the <code>Asset</code> contract.  If we verify the rule without
+giving the Prover access to the <code>Asset</code> code, the call to <code>transferFrom(...)</code>
+will be unresolved.</p>
+<p>By default, the Prover will handle calls to unresolved functions by assuming
+they can do almost anything — we say that the Prover "{term}<code>havocs &lt;havoc&gt;</code>"
+some part of the state.  The part of the state that is havoced depends on the
+type of call: calls to view functions are allowed to return any value but can
+not affect storage (a <code>NONDET</code> summary), while calls to non-view functions are
+allowed to change the storage of all contracts in the system <em>besides the
+calling contract</em>[^reentrancy] (a <code>HAVOC_ECF</code> summary).  See
+{ref}<code>auto-summary</code> in the reference manual for complete details.</p>
+<p>storage of the calling contract.  This assumption comes from an assumption
+  that the called code is non-reentrant.  If you are concerned about violations
+  caused by reentrancy, you can override this assumption using a <code>HAVOC_ALL</code>
+  summary; see {ref}<code>havoc-summary</code> for details.</p>
+<p>We can see this behavior by verifying the <code>integrityOfDeposit</code> rule against the
+<code>Pool</code> contract without giving the Prover access to the <code>Asset</code> contract.
+The {clink}<code>JustPool.conf&lt;/DEFI/LiquidityPool/JustPool.conf&gt;</code> config file does
+just that, run it using:</p>
+<p><code>sh
+$ certoraRun JustPool.conf
+</code></p>
+<p>In this case, the <code>integrityOfDeposit</code> rule fails.  To understand why, we can
+unfold the call trace for the call to <code>deposit</code>:</p>
+<p><img alt="Call trace for &lt;code&gt;integrityOfDeposit&lt;/code&gt; with &lt;code&gt;deposit&lt;/code&gt; method unfolded to show DEFAULT HAVOCs for calls to &lt;code&gt;balanceOf&lt;/code&gt; and &lt;code&gt;transferFrom&lt;/code&gt;" src="no-link-call-trace.png"/></p>
+<p>Here we see that the calls to <code>transferFrom</code> and <code>balanceOf</code> are marked with
+"DEFAULT HAVOC".  This means that the Prover lets the call to
+<code>transferFrom</code> to change the balances any way it likes.  In fact, calls to
+<code>asset.balanceOf(...)</code> are also unresolved, so the Prover can choose any return
+value that causes a counterexample.  In this case, we can see that the Prover
+chose <code>3</code> for the first return value of <code>balanceOf</code> and <code>9</code>
+for the last return value of <code>balanceOf</code>:</p>
+<p><img alt="Call trace for &lt;code&gt;integrityOfDeposit&lt;/code&gt; on &lt;code&gt;Pool&lt;/code&gt; showing call to &lt;code&gt;assetBalance&lt;/code&gt; with internal havoced call to &lt;code&gt;balanceOf&lt;/code&gt;, returning 3 in once place and 9 in another" src="no-link-variables.png"/></p>
+<p>The "Call Resolution" tab on the report provides more information about all of
+the unlinked external method calls within the contract and how they are
+resolved by the Prover[^resolutionWarnings]:</p>
+<p><img alt="Call resolution for &lt;code&gt;integrityOfDeposit&lt;/code&gt; showing havocs of return values for &lt;code&gt;balanceOf&lt;/code&gt; and all variables of external contracts for &lt;code&gt;transferFrom&lt;/code&gt;" src="no-link-call-resolution.png"/></p>
+<p>considered warnings; in this case there are three unresolved calls, which is
+  why there is a red 3 on the call resolution tab.  In general, it is good
+  practice to explicitly resolve all calls.</p>
+<p>Here we see that the call from <code>Pool.deposit</code> to <code>balanceOf</code> is summarized by
+havocing only the return value (since <code>balanceOf</code> is a view method), while the
+call from <code>Pool.deposit</code> to <code>transferFrom</code> havocs all contracts except <code>Pool</code>.</p>
+<h2>Working with known contracts</h2>
+<p>In the case of the <code>Pool</code> verification, we don't want the Prover to choose
+arbitrary behavior for the <code>Asset</code>, because we have the <code>Asset</code> code.  Instead,
+we would like the Prover to model the <code>asset</code> contract using the <code>Asset</code> code.</p>
+<p>To do so, we must first add the <code>Asset</code> contract to the set of contracts that
+the Prover knows about.  This set of contracts is called the {term}<code>scene</code>.  You
+can add a contract to the scene by passing the solidity source as a
+<a href="/docs/prover/cli/options.md">command line argument</a>
+to <code>certoraRun</code>.  The Prover creates a contract instance (with a corresponding
+address[^addressOption]) in the scene for each source contract provided on the command
+line (or the config file).</p>
+<p><code>sh
+$ certoraRun contracts/Pool.sol contracts/Asset.sol --verify Pool:certora/specs/pool_havoc.spec ...
+</code></p>
+<p>using the {ref}<code>--address</code> option.</p>
+<p>Adding <code>Asset.sol</code> to the scene makes the Prover aware of it, but it does not
+connect the <code>asset</code> field of the pool to the <code>Asset</code> contract.  Although
+<code>Pool.asset</code> is declared to have type <code>Asset</code> in the solidity source, the
+solidity compiler erases that information from the bytecode; in the compiled
+bytecode the field is just treated as an <code>address</code>, and at run time the field
+could point to any contract.</p>
+<p>To connect the <code>Asset</code> code to the <code>Pool.asset</code> field, we can use the
+{ref}<code>--link</code> option:</p>
+<p><code>{eval-rst}
+.. literalinclude:: ../../../Examples/DEFI/LiquidityPool/WithLinking.conf
+   :language: json
+   :caption: :clink:`WithLinking.conf&lt;/DEFI/LiquidityPool/WithLinking.conf&gt;`
+   :emphasize-lines: 8-10
+</code></p>
+<p>The <code>--link Pool:asset=Asset</code> option tells the Prover to assume that the <code>asset</code>
+field of the <code>Pool</code> contract instance in the scene is a pointer to the <code>Asset</code>
+contract instance in the scene.  With this information, the Prover is able to
+resolve the calls to the methods on <code>Pool.asset</code> using the code in <code>Asset.sol</code>.</p>
+<p>With this option, the Prover is no longer able to construct a counterexample to
+the <code>integrityOfDeposit</code> rule, so the rule passes. Note that the external calls
+to the <code>Asset</code> contract no longer appear in the "Call Resolution" tab, because
+the Prover does not report linked calls here.</p>
+<p>(using-example)=</p>
+<h3>Accessing additional contracts from CVL</h3>
+<p>When a contract instance is added to the scene, it is also possible to call
+methods on that contract directly from CVL.  To do so, you need to introduce
+a variable name for the contract instance using
+{ref}<code>the using statement &lt;using-stmt&gt;</code>.  In our running example, we can create
+a variable <code>underlying</code> to refer to the <code>Asset</code> contract instance[^using-position].</p>
+<p>(if any) and before the <code>methods</code> block (if any).</p>
+<p><code>cvl
+using Asset as underlying;
+using Pool as pool;
+</code></p>
+<p>We can then call methods on the contract <code>underlying</code>.  For example, instead of
+adding a special method <code>assetBalance</code> to the <code>Pool</code> contract to call
+<code>asset.balanceOf</code> for us, we can call it directly from the spec:</p>
+<p>``<code>cvl
+///</code>deposit` must increase the pool's underlying asset balance
+rule integrityOfDeposit {</p>
+<pre><code>env e1;
+mathint balance_before = underlying.balanceOf(e1, pool);
+
+env e; uint256 amount;
+require e.msg.sender != pool;
+
+deposit(e, amount);
+
+env e2;
+mathint balance_after = underlying.balanceOf(e2, pool);
+
+assert balance_after == balance_before + amount,
+    "deposit must increase the underlying balance of the pool";
+</code></pre>
+<p>}
+```</p>
+<p>We can simplify this rule in two ways. First, we can declare the
+<code>underlying.balanceOf</code> method <code>envfree</code> to avoid explicitly passing in <code>env</code>
+variables. This works the same way as <code>envfree</code> {ref}<code>declarations for the
+main contract &lt;envfree&gt;</code>, except that you must indicate that the method is for
+the <code>underlying</code> contract instance [^wildcards]:</p>
+<p><code>{eval-rst}
+.. cvlinclude:: ../../../Examples/DEFI/LiquidityPool/certora/specs/pool_link.spec
+   :cvlobject: methods
+   :lines: 12-14
+</code></p>
+<p>also use the contract name: <code>Asset.balanceOf</code>.  You could also write a single
+  entry for all <code>balanceOf</code> methods using <code>_</code> for the contract: <code>_.balanceOf</code>.
+  See {ref}<code>methods-entries</code> for full details.</p>
+<p>The second simplification is that we can use the special variable
+<code>currentContract</code> to refer to the main contract being verified (the one passed
+to {ref}<code>--verify</code>), so we don't need to add the <code>using</code> statement for <code>Pool</code>.
+With these changes, the rule looks as follows:</p>
+<p><code>{eval-rst}
+.. cvlinclude:: ../../../Examples/DEFI/LiquidityPool/certora/specs/pool_link.spec
+   :cvlobject: integrityOfDeposit
+   :caption: :clink:`integrityOfDeposit from pool_link.spec&lt;/DEFI/LiquidityPool/certora/specs/pool_link.spec&gt;`
+</code></p>
+<p>You can run this rule using the
+{clink}<code>WithLinking.conf&lt;/DEFI/LiquidityPool/WithLinking.conf&gt;</code> config file.</p>
+<p>(unknown-contracts)=</p>
+<h2>Working with unknown contracts</h2>
+<p>Linking is appropriate for situations when we know the specific contracts that
+a field points to.  In many cases, however, we <em>don't</em> know what contract an
+address refers to.  For example:</p>
+<ul>
+<li><p>A contract may call a method on a contract address passed in by the user.  In
+our running example, the user may provide any <code>FlashLoanReceiver</code>
+implementation they want to.</p></li>
+<li><p>A contract may be designed to work with many instances of the same interface.
+For example, a pool might be designed to work with arbitrary ERC20
+implementations.</p></li>
+</ul>
+<p>In this case, the only option is to {term}<code>summarize</code> the unknown code for the
+Prover.  Although there are many available types of summaries, the ones most
+commonly used for unknown code are {ref}<code>dispatcher</code>.</p>
+<p>The <code>DISPATCHER</code> summary resolves calls by assuming that the receiver address
+is one of the contracts in the scene that implements the called method.  It
+will try every option, and if any of them can cause a violation, it will
+report a counterexample.</p>
+<p><code>{warning}
+The `DISPATCHER` summary is {term}`unsound`, meaning that using it can cause you
+to hide bugs in your contracts.  Therefore, you should make sure you understand
+the risks before using them.  See {ref}`dispatcher-danger` below.
+</code></p>
+<p>To demonstrate the <code>DISPATCHER</code> summary, let us prove a basic property about
+flash loans.  For example, we might like to show that flash loans can only
+increase the underlying balance of the pool.  We can write the property as
+follows:</p>
+<p><code>{eval-rst}
+.. cvlinclude:: ../../../Examples/DEFI/LiquidityPool/certora/specs/flashLoan_dispatcher.spec
+   :cvlobject: flashLoanIncreasesBalance
+   :caption: :clink:`flashLoanIncreasesBalance&lt;/DEFI/LiquidityPool/certora/specs/flashLoan_dispatcher.spec&gt;`
+</code></p>
+<p>Verifying this rule without any summarization will fail, for the same reasons
+that the first run of <code>integrityOfDeposit</code> above failed:  the <code>flashLoan</code>
+method calls <code>executeOperation</code> on an unknown contract, and the Prover
+constructs a counterexample where <code>executeOperation</code> changes the underlying
+balance.  This is possible because the default <code>HAVOC_ECF</code> summary allows
+<code>executeOperation</code> to do anything to the <code>underlying</code> contract.</p>
+<p>To use a <code>DISPATCHER</code> summary for the <code>executeOperation</code> method, we add it to
+the <code>methods</code> block[^optimistic-dispatcher]:</p>
+<p><code>{eval-rst}
+.. cvlinclude:: ../../../Examples/DEFI/LiquidityPool/certora/specs/flashLoan_dispatcher.spec
+   :cvlobject: methods
+   :lines: 1, 4-5
+</code></p>
+<p>use "optimistic dispatch mode".  Optimistic mode is almost always the right
+  choice; see {ref}<code>dispatcher</code> in the reference manual for full details.</p>
+<p>This summary means that when the Prover encounters an external call to
+<code>receiver.executeOperation(...)</code>, it will try to construct counterexamples
+where the <code>receiver</code> contract is any of the contracts in the scene that
+implement the <code>executeOperation</code> method.  We use the wildcard <code>_</code> as the
+receiver contract so that the summary will apply regardless of the receiver
+contract.</p>
+<p>So far, there are no contracts in the scene that implement the
+<code>executeOperation</code> method, so the Prover will conservatively use a havoc
+summary for the call, and the rule will still fail.  To make use of the
+dispatcher summary, we need to add a contract to the scene that implements the
+method.</p>
+<p>Let's start by adding a trivial receiver
+(in {clink}<code>TrivialReceiver.sol&lt;/DEFI/LiquidityPool/certora/harness/TrivialReceiver.sol&gt;</code>)
+that implements <code>executeOperation</code> but does nothing:</p>
+<p><code>{eval-rst}
+.. literalinclude:: ../../../Examples/DEFI/LiquidityPool/certora/harness/TrivialReceiver.sol
+   :language: solidity
+   :caption: :clink:`TrivialReceiver.sol&lt;/DEFI/LiquidityPool/certora/harness/TrivialReceiver.sol&gt;`
+   :lines: 5-
+</code></p>
+<p>Adding <code>TrivialReceiver.sol</code> to the scene allows the Prover to dispatch to it.
+To run, use the {clink}<code>FlashLoanTrivial.conf&lt;/DEFI/LiquidityPool/FlashLoanTrivial.conf&gt;</code>
+config file.</p>
+<p>With this dispatcher in place, the rule passes. Examining the call resolution
+tab shows that the Prover used the dispatcher summary for <code>executeOperation</code>
+and considered only <code>TrivialReceiver.executeOperation</code> as a possible
+implementation:</p>
+<p><img alt='Call resolution tab showing &lt;code&gt;Pool.flashLoan&lt;/code&gt; summarized with a Dispatcher.
+The "alternatives" list contains &lt;code&gt;[TrivialReceiver.executeOperation]&lt;/code&gt;' src="trivial-resolution.png"/></p>
+<p>Although the rule passes, it is important to pause and think about what we have
+proved; the next section shows that we shouldn't rest easy yet.</p>
+<p>(dispatcher-danger)=</p>
+<h3>The dangers of <code>DISPATCHER</code></h3>
+<p>What we have proved so far is that <em>if</em> the only possible <code>FlashLoanReceiver</code>
+is <code>TrivialReceiver</code>, <em>then</em> the pool's underlying balance doesn't decrease.
+However, we have not proved that the underlying balance <em>never</em> decreases after
+a flash loan.</p>
+<p>Since the <code>DISPATCHER</code> summary only considers the contracts you provide as
+possible implementations, it forces you to think about a threat model: the set
+of behaviors that you want to protect against.  If there is a clever way to
+construct a receiver contract that violates the rule, but you don't think of
+it, the Prover won't be able to find it.  So far, we were able to prove the
+rule, but only with a very weak threat model: we assume that the flash loan
+receiver does nothing.</p>
+<p>In fact, we can easily construct a flash loan receiver that decreases the
+pool's underlying balance.  For example, if the receiver somehow got an
+approval to transfer underlying tokens away from the pool, it could just
+transfer them, thereby decreasing the underlying balance of the pool.
+We can write such a receiver:</p>
+<p><code>{eval-rst}
+.. literalinclude:: ../../../Examples/DEFI/LiquidityPool/certora/harness/TransferReceiver.sol
+   :language: solidity
+   :caption: :clink:`TransferReceiver.sol&lt;/DEFI/LiquidityPool/certora/harness/TransferReceiver.sol&gt;`
+   :lines: 6-
+</code></p>
+<p>Note that this isn't a complete working example; we haven't provided a
+constructor, or linked the <code>pool</code> address to the actual pool, or any way to
+ensure that the pool has given the receiver an allowance.  Nevertheless, if we
+add it to the scene, the Prover is able to use it to construct a
+counterexample. Since the Prover explores every possible value of the <code>pool</code>
+variable, and every possible value for the underlying's allowances, it is able
+to set up the details of the counterexample automatically.</p>
+<p>We do need to do one more piece of setup to get this receiver to work the way
+we'd like. If we just add <code>TransferReceiver</code> to the scene, the Prover will not
+be able to resolve its call to <code>transferFrom</code>.  This will cause the same kind
+of havoc we saw above. We could remedy this using a <code>DISPATCHER</code> summary for
+<code>transferFrom</code> (see {ref}<code>erc20-dispatcher</code>), but for now, we'll simply
+link the <code>underlying</code> variable to the <code>Asset</code> contract instance:</p>
+<p><code>{eval-rst}
+.. literalinclude:: ../../../Examples/DEFI/LiquidityPool/FlashLoanTransfer.conf
+   :language: json
+   :caption: :clink:`FlashLoanTransfer.conf&lt;/DEFI/LiquidityPool/FlashLoanTransfer.conf&gt;`
+   :emphasize-lines: 10-13
+</code></p>
+<p>With the additional receiver implementation on the scene, we see that the Prover
+considers both alternatives for the <code>executeOperation</code> call:</p>
+<p><img alt='Call resolution tab showing unresolved call from &lt;code&gt;Pool.flashLoan&lt;/code&gt; to
+  &lt;code&gt;executeOperation&lt;/code&gt;, with the "alternatives" set containing both
+  &lt;code&gt;TransferReceiver.executeOperation&lt;/code&gt; and &lt;code&gt;TrivialReceiver.executeOperation&lt;/code&gt;' src="transfer-resolution.png"/></p>
+<p>And we also see that it was able to use the <code>TransferReceiver</code> to construct a
+counterexample:</p>
+<p><img alt="Partial call trace showing &lt;code&gt;executeOperation&lt;/code&gt; dispatched to
+  &lt;code&gt;TransferReceiver.executeOperation&lt;/code&gt;, which calls
+  &lt;code&gt;transferFrom(Pool,TransferReceiver,2)&lt;/code&gt;" src="transfer-trace.png"/></p>
+<p>As we expected, the dispatcher for <code>executeOperation</code> chooses
+<code>TransferReceiver.executeOperation</code> as the receiver, which in turn calls
+<code>underlying.transferFrom(Pool, ..., 2)</code>.  If we look in the initial storage of the contract,
+we see that the Prover chose the pool's allowance for the recipient to be
+<code>10</code>:</p>
+<p><img alt="Call trace entry showing &lt;code&gt;_allowance[Pool][TransferReceiver]&lt;/code&gt; returning &lt;code&gt;10&lt;/code&gt;" src="transfer-allowance.png"/></p>
+<p>It turns out that this particular violation can't actually happen, because the
+pool contract never approves any other contract to transfer its funds.  We
+could prove an invariant to this effect and add it to our rule using
+{ref}<code>requireInvariant</code>.</p>
+<p>For more examples of <code>requireInvariant</code> usage, check out the <a href="../patterns/require-invariants.md">user guide</a>.</p>
+<p>Nevertheless, this example shows that having too few dispatchees can cause a
+rule to pass, even though the property it describes is not necessarily true in
+all situations.</p>
+<h3>Designing flexible dispatchees</h3>
+<p>The <code>TransferReceiver</code> described in the previous section is fairly targeted: we
+thought of a way to violate the rule, and then designed a receiver contract to
+cause the violation.  However, one of the main benefits of the Prover is that
+you don't have to know in advance the attacks you're trying to prevent, and
+this approach to creating dispatchees loses that benefit.</p>
+<p>There is a clever trick you can use to write flexible dispatchees that can
+cover a broad range of potential attacks.  The trick relies on the fact that the
+Prover will consider all possible values for contract fields when trying to
+produce a counterexample.</p>
+<p>Suppose we wanted to reason about the possibility that a flash loan receiver
+could make non-view calls back to the pool from <code>executeOperation</code>.  We could
+write a separate receiver contract for each method which just calls that method,
+and add them all to the scene as potential dispatchees.  However, this can
+become cumbersome, especially if there are multiple methods that need to be
+implemented.</p>
+<p>Instead, we can write a single receiver that simulates all of these potential
+method calls.  Let's start by getting a list of the external methods of the
+contract.  The Prover helpfully provides such a list whenever we verify a rule[^noview]:</p>
+<p><img alt='"Contract list" tab (next to the "Results" tab) showing the &lt;code&gt;Pool&lt;/code&gt; contract
+  and all of its methods' src="pool-methods.png"/></p>
+<p>the source code to determine which ones are non-view functions.</p>
+<p>Now, we can write an <code>executeOperation</code> method that could call any of the
+non-view functions.  We can do this with a big <code>if</code>-<code>then</code>-<code>else</code> statement (
+:clink:<code>full contract&lt;/DEFI/LiquidityPool/certora/harness/FlexibleReceiver.sol&gt;</code>)[^no-recursion]:</p>
+<p>```solidity
+contract FlexibleReceiver is IFlashLoanReceiver {
+    IPool token;</p>
+<pre><code>function executeOperation(...) ... {
+    uint  callbackChoice = ...;
+
+    if (callbackChoice == 0)
+        token.deposit(...);
+    else if (callbackChoice == 1)
+        token.transferFrom(...);
+    else if (callbackChoice == 2)
+        token.withdraw(...);
+    ...
+    else
+        assert(false, "invalid callbackChoice value");
+
+    return ...;
+}
+</code></pre>
+<p>}
+```</p>
+<p>cause potentially infinite recursion, which will cause the Prover to fail.</p>
+<p>The value of the <code>callbackChoice</code> variable determines which <code>Pool</code> method
+<code>executeOperation</code> will call. We would like the Prover to consider every
+possible value of the <code>callbackChoice</code> field, so that it can choose to call any
+of the pool's methods. We would also like the Prover to consider every choice
+of arguments to these method calls.</p>
+<p>For this to be valid solidity code, we need to actually give values to the
+<code>callbackChoice</code> and the arguments to the called methods. To do this, we use a
+clever trick. Since the Prover considers every possible value for storage
+variables, we can simply use a storage variable for <code>callbackChoice</code> and for
+the arguments. For example, we could write</p>
+<p>```solidity
+contract FlexibleReceiver is IFlashLoanReceiver {
+    ...</p>
+<pre><code>uint arbitraryCallback;
+function executeOperation(...) ... {
+    uint callbackChoice = arbitraryCallback;
+
+    ...
+}
+</code></pre>
+<p>}
+```</p>
+<p>The Prover will consider cases where <code>arbitraryCallback</code> can have any possible
+value at the beginning of the rule, and we can use this arbitrary value to fill
+in <code>callbackChoice</code>[^arbitrary-constructor].</p>
+<p>checks for invariants, since storage is always initialized to zero at the
+  start of a constructor.</p>
+<p>One potential drawback of this choice is that the receiver contract will make
+the same callback every time <code>executeOperation</code> is called within a rule.  We can
+relax this restriction by using a mapping of arbitrary values instead of a
+single callback:</p>
+<p>```solidity
+contract FlexibleReceiver is IFlashLoanReceiver {
+    ...</p>
+<pre><code>uint counter;
+mapping(uint =&gt; uint) arbitraryCallbacks;
+
+function executeOperation(...) ... {
+    uint  callbackChoice = arbitraryCallbacks[counter++];
+
+    ...
+}
+</code></pre>
+<p>}
+```</p>
+<p>With this version, the Prover is able to choose a new value of
+<code>arbitraryCallbacks[i]</code> for each <code>i</code>; since the <code>counter</code> variable is updated
+on each call, this means that it can choose a different value of
+<code>callbackChoice</code> for each call.</p>
+<p>The abstract contract {clink}<code>ArbitraryValues&lt;/DEFI/LiquidityPool/certora/helpers/ArbitraryValues.sol&gt;</code>
+makes this simple. For each value type, it provides an <code>arbitraryType()</code> method that
+returns an undefined value that the Prover can fill in arbitrarily as it is
+constructing counterexamples.  For example, the <code>arbitraryInt192()</code> method
+returns a newly selected <code>int192</code> each time it called.  In this case, we can
+use the <code>arbitraryUint</code> and <code>arbitraryAddress</code> methods to choose the callback
+and the arguments (conf file {clink}<code>WithFlexibleLinked.conf&lt;/DEFI/LiquidityPool/WithFlexibleLinked.conf&gt;</code>).</p>
+<p><code>{eval-rst}
+.. literalinclude:: ../../../Examples/DEFI/LiquidityPool/certora/harness/FlexibleReceiver.sol
+   :language: solidity
+   :caption: :clink:`FlexibleReceiver.sol&lt;/DEFI/LiquidityPool/certora/harness/FlexibleReceiver.sol&gt;`
+   :lines: 7-
+</code></p>
+<p>With this implementation, the Prover will consider every possible value for
+<code>callbackChoice</code> as well as for the arguments to the methods, which has the
+effect of calling an arbitrary non-view method on <code>pool</code> with arbitrary
+arguments.</p>
+<p>This approach still doesn't give perfect coverage.  If the <code>token</code> field is
+linked to the pool, it will only call methods on the pool.  In fact, this
+receiver will miss the violation that the <code>TransferReceiver</code> uncovered, because
+that requires calling <code>transferFrom</code> on the <code>Asset</code> rather than the <code>Pool</code>,
+although this particular shortcoming can be
+addressed by {ref}<code>using a dispatcher for the ERC20 methods &lt;erc20-dispatcher&gt;</code>
+instead of linking to the pool.</p>
+<p>Another important caveat is that this technique does not work for initial state
+checks for invariants.  In this case, the Prover does not choose arbitrary
+values for storage variables, since it knows that storage variables are all
+initialized to 0 before the constructor call.  Therefore, the <code>arbitraryType()</code>
+methods will always return 0.</p>
+<p>A third shortcoming with this implementation is that it only makes one
+reentrant call to the <code>token</code> contract.  Vulnerabilities that require two or
+more callbacks from the <code>FlashLoanReceiver</code> to exploit will not be detected.</p>
+<p>Nevertheless, this technique is a useful way to build dispatchers that get
+pretty good coverage without requiring too much prediction of the bugs they
+will find.  The <code>ArbitraryValues</code> helper contract makes this pattern easy to
+implement.</p>
+<p>(erc20-dispatcher)=</p>
+<h3>Using <code>DISPATCHER</code> for ERC20 contracts</h3>
+<p>One very common use case for the material discussed in this chapter is when a
+contract is designed to work with arbitrary ERC20 tokens.  In this case, it is
+common to summarize all of the ERC20 methods using <code>DISPATCHER</code> summaries, and
+to provide several ERC20 implementations to the Prover.</p>
+<p>To facilitate this, the {clink}<code>helpers&lt;/DEFI/LiquidityPool/certora/helpers/&gt;</code>
+directory of the example code contains a
+{clink}<code>spec file called erc20.spec&lt;/DEFI/LiquidityPool/certora/helpers/erc20.spec&gt;</code>
+as well as a variety of ERC20 token implementations
+(inside {clink}<code>tokens&lt;/DEFI/LiquidityPool/certora/helpers/tokens&gt;</code> folder).
+The <code>erc20.spec</code> file simply contains a methods block that summarizes all of the
+ERC20 methods as <code>DISPATCHER</code>.  You can use an
+{doc}<code>import statement &lt;/docs/cvl/imports&gt;</code> to include this in your spec:</p>
+<p><code>cvl
+import "../helpers/erc20.spec";
+</code></p>
+<p>This gives a concise way to handle this situation.  Be sure to include the
+tokens in the scene!</p>
+<h2>Conclusion</h2>
+<p>In this chapter, we've seen several techniques for handling inter-contract
+calls.  Linking allows us to give the source code for a contract referenced by
+a particular field.  <code>DISPATCHER</code> summaries instruct the Prover to consider
+several possible implementations of a contract, and can be used when we don't
+know exactly which contract an address will refer to.</p>
+<p>We've seen that <code>DISPATCHER</code> summaries are not completely safe — they
+constrain the possible implementations of external contracts, so they may miss
+bugs that those implementations don't trigger.  However, we have seen a useful
+technique that can explore a wide range of behaviors with little effort.</p>
+<html><head><meta content="https://github.com/Certora/Documentation/user-guide/multicontract/index.md" name="source"/><meta content="https://github.com/Certora/Documentation/user-guide/multicontract/index.md" name="url"/><meta content="Accessing additional contracts from CVL" name="title"/><meta content="{eval-rst}
+.. role:: cvl(code)
+   :language: cvl
+
+Working with Multiple Contracts
+In the previous chapter, we focused on rules describing the behavior of a
+single contract.  In practice, most protocol" name="text"/></head><body><div style="background-color: #f0f0f0; padding: 10px; margin-bottom: 20px;">Source: https://github.com/Certora/Documentation/user-guide/multicontract/index.md</div><p><code>{eval-rst}
+.. role:: cvl(code)
+   :language: cvl
+</code></p>
+<h1>Working with Multiple Contracts</h1>
+<p>In the previous chapter, we focused on rules describing the behavior of a
+single contract.  In practice, most protocols consist of multiple interacting
+contracts.  In this chapter, we discuss techniques for verifying protocols
+involving multiple contracts.</p>
+<p>We begin by walking through a running example protocol and explaining the
+Prover's default behavior when it encounters calls from one contract to
+another.  We then show how to handle a protocol consisting of multiple
+contracts whose implementation is known.  After that, we discuss dispatcher
+summaries, an important technique for handling contracts whose implementation
+is not known at verification time.  Finally, we give a concrete and reusable
+setup for a very common case: a contract that can work with many different ERC20
+implementations.</p>
+<p>The entire running example for this chapter can be found {clink}<code>here&lt;/DEFI/LiquidityPool/&gt;</code>.</p>
+<p><code>{contents}
+</code></p>
+<h2>Example protocol</h2>
+<p>To demonstrate these concepts, we work with a simplified liquidity pool contract called
+{clink}<code>Pool&lt;/DEFI/LiquidityPool/contracts/Pool.sol&gt;</code>.
+The {clink}<code>full specification&lt;/DEFI/LiquidityPool/certora/specs/Full.spec&gt;</code> is in
+<code>certora/specs/Full.spec</code> (although this chapter only discusses the
+<code>integrityOfDeposit</code> and <code>flashLoanIncreasesBalance</code> properties) and the
+{clink}<code>final run conf&lt;/DEFI/LiquidityPool/runFullPool.conf&gt;</code> is in <code>runFullPool.conf</code>.</p>
+<p>The liquidity pool allows users to deposit and withdraw a single fixed type of
+ERC20 token (the <code>asset</code>). The liquidity pool itself is an ERC20 token and
+balance in the liquidity pool token denotes the <em>shares</em> in the pool.
+We'll reserve the words <em>amount</em> and <em>assets</em> to denote balance in the <code>asset</code>.
+So, in return for depositing <em>assets</em> the user receives <em>shares</em> in the pool.
+Withdrawing decreases the user's shares and increases the user' assets.</p>
+<p>Here is the interface for the pool, followed by the Pool's code.</p>
+<p><code>{eval-rst}
+.. literalinclude:: ../../../Examples/DEFI/LiquidityPool/contracts/IPool.sol
+   :language: solidity
+   :caption: :clink:`IPool interface&lt;/DEFI/LiquidityPool/contracts/IPool.sol&gt;`
+</code></p>
+<p>``<code>{eval-rst}
+.. dropdown:: :clink:</code>Pool.sol `</p>
+<p>.. literalinclude:: ../../../Examples/DEFI/LiquidityPool/contracts/Pool.sol
+      :language: solidity
+```</p>
+<p>For demonstration purposes, we have also added function <code>assetBalance</code>, which
+returns the pool's balance of the underlying asset (we'll see
+{ref}<code>later &lt;using-example&gt;</code> that this is not necessary):</p>
+<p><code>{eval-rst}
+.. literalinclude:: ../../../Examples/DEFI/LiquidityPool/contracts/Pool.sol
+   :language: solidity
+   :caption: :clink:`assetBalance&lt;/DEFI/LiquidityPool/contracts/IPool.sol&gt;`
+   :lines: 82-84
+</code></p>
+<p>Users can also take out <em>flash loans</em> - loans that must be repaid within the same
+transaction.  To do so, the user calls <code>flashLoan</code>, passing in a
+<code>FlashLoanReceiver</code> contract and the desired number of tokens.  The <code>flashLoan</code>
+method transfers the tokens to the receiver, calls the <code>executeOperation</code>
+method on the receiver, and finally transfers the tokens (plus a fee) from the
+receiver back to the pool:</p>
+<p><code>{eval-rst}
+.. literalinclude:: ../../../Examples/DEFI/LiquidityPool/contracts/Pool.sol
+   :language: solidity
+   :caption: :clink:`flashLoan&lt;/DEFI/LiquidityPool/contracts/IPool.sol&gt;`
+   :lines: 67-76
+</code></p>
+<p>Our goal is to prove properties about the <code>Pool</code> contract, but we will need to
+interact with the entire combined protocol consisting of the <code>Pool</code> contract,
+the <code>Asset</code> contract, and the <code>FlashLoanReceiver</code> contracts.  We will begin by
+explaining the default behavior of the Prover when making external calls to
+unknown contracts.  We will then show how to link the specific <code>Asset</code> contract
+implementation to the <code>Pool</code> contract. Finally, we will show some techniques
+for reasoning about the open-ended set of possible <code>FlashLoanReceiver</code>
+implementations.</p>
+<h2>Handling unresolved method calls</h2>
+<p>To start, let's write a basic property of the pool and run the Prover on the
+<code>Pool</code> contract to see how it handles calls to unknown code.</p>
+<p>Here is a simple property:</p>
+<p><code>{eval-rst}
+.. cvlinclude:: ../../../Examples/DEFI/LiquidityPool/certora/specs/pool_havoc.spec
+   :cvlobject: integrityOfDeposit
+   :caption: :clink:`integrityOfDeposit&lt;/DEFI/LiquidityPool/certora/specs/pool_havoc.spec&gt;`
+</code></p>
+<p>This rule makes a call to <code>Pool.deposit(...)</code>, which in turn makes a call to
+<code>asset.transferFrom(...)</code>; to understand the behavior of <code>deposit</code> the Prover
+must also reason about the <code>Asset</code> contract.  If we verify the rule without
+giving the Prover access to the <code>Asset</code> code, the call to <code>transferFrom(...)</code>
+will be unresolved.</p>
+<p>By default, the Prover will handle calls to unresolved functions by assuming
+they can do almost anything — we say that the Prover "{term}<code>havocs &lt;havoc&gt;</code>"
+some part of the state.  The part of the state that is havoced depends on the
+type of call: calls to view functions are allowed to return any value but can
+not affect storage (a <code>NONDET</code> summary), while calls to non-view functions are
+allowed to change the storage of all contracts in the system <em>besides the
+calling contract</em>[^reentrancy] (a <code>HAVOC_ECF</code> summary).  See
+{ref}<code>auto-summary</code> in the reference manual for complete details.</p>
+<p>storage of the calling contract.  This assumption comes from an assumption
+  that the called code is non-reentrant.  If you are concerned about violations
+  caused by reentrancy, you can override this assumption using a <code>HAVOC_ALL</code>
+  summary; see {ref}<code>havoc-summary</code> for details.</p>
+<p>We can see this behavior by verifying the <code>integrityOfDeposit</code> rule against the
+<code>Pool</code> contract without giving the Prover access to the <code>Asset</code> contract.
+The {clink}<code>JustPool.conf&lt;/DEFI/LiquidityPool/JustPool.conf&gt;</code> config file does
+just that, run it using:</p>
+<p><code>sh
+$ certoraRun JustPool.conf
+</code></p>
+<p>In this case, the <code>integrityOfDeposit</code> rule fails.  To understand why, we can
+unfold the call trace for the call to <code>deposit</code>:</p>
+<p><img alt="Call trace for &lt;code&gt;integrityOfDeposit&lt;/code&gt; with &lt;code&gt;deposit&lt;/code&gt; method unfolded to show DEFAULT HAVOCs for calls to &lt;code&gt;balanceOf&lt;/code&gt; and &lt;code&gt;transferFrom&lt;/code&gt;" src="no-link-call-trace.png"/></p>
+<p>Here we see that the calls to <code>transferFrom</code> and <code>balanceOf</code> are marked with
+"DEFAULT HAVOC".  This means that the Prover lets the call to
+<code>transferFrom</code> to change the balances any way it likes.  In fact, calls to
+<code>asset.balanceOf(...)</code> are also unresolved, so the Prover can choose any return
+value that causes a counterexample.  In this case, we can see that the Prover
+chose <code>3</code> for the first return value of <code>balanceOf</code> and <code>9</code>
+for the last return value of <code>balanceOf</code>:</p>
+<p><img alt="Call trace for &lt;code&gt;integrityOfDeposit&lt;/code&gt; on &lt;code&gt;Pool&lt;/code&gt; showing call to &lt;code&gt;assetBalance&lt;/code&gt; with internal havoced call to &lt;code&gt;balanceOf&lt;/code&gt;, returning 3 in once place and 9 in another" src="no-link-variables.png"/></p>
+<p>The "Call Resolution" tab on the report provides more information about all of
+the unlinked external method calls within the contract and how they are
+resolved by the Prover[^resolutionWarnings]:</p>
+<p><img alt="Call resolution for &lt;code&gt;integrityOfDeposit&lt;/code&gt; showing havocs of return values for &lt;code&gt;balanceOf&lt;/code&gt; and all variables of external contracts for &lt;code&gt;transferFrom&lt;/code&gt;" src="no-link-call-resolution.png"/></p>
+<p>considered warnings; in this case there are three unresolved calls, which is
+  why there is a red 3 on the call resolution tab.  In general, it is good
+  practice to explicitly resolve all calls.</p>
+<p>Here we see that the call from <code>Pool.deposit</code> to <code>balanceOf</code> is summarized by
+havocing only the return value (since <code>balanceOf</code> is a view method), while the
+call from <code>Pool.deposit</code> to <code>transferFrom</code> havocs all contracts except <code>Pool</code>.</p>
+<h2>Working with known contracts</h2>
+<p>In the case of the <code>Pool</code> verification, we don't want the Prover to choose
+arbitrary behavior for the <code>Asset</code>, because we have the <code>Asset</code> code.  Instead,
+we would like the Prover to model the <code>asset</code> contract using the <code>Asset</code> code.</p>
+<p>To do so, we must first add the <code>Asset</code> contract to the set of contracts that
+the Prover knows about.  This set of contracts is called the {term}<code>scene</code>.  You
+can add a contract to the scene by passing the solidity source as a
+<a href="/docs/prover/cli/options.md">command line argument</a>
+to <code>certoraRun</code>.  The Prover creates a contract instance (with a corresponding
+address[^addressOption]) in the scene for each source contract provided on the command
+line (or the config file).</p>
+<p><code>sh
+$ certoraRun contracts/Pool.sol contracts/Asset.sol --verify Pool:certora/specs/pool_havoc.spec ...
+</code></p>
+<p>using the {ref}<code>--address</code> option.</p>
+<p>Adding <code>Asset.sol</code> to the scene makes the Prover aware of it, but it does not
+connect the <code>asset</code> field of the pool to the <code>Asset</code> contract.  Although
+<code>Pool.asset</code> is declared to have type <code>Asset</code> in the solidity source, the
+solidity compiler erases that information from the bytecode; in the compiled
+bytecode the field is just treated as an <code>address</code>, and at run time the field
+could point to any contract.</p>
+<p>To connect the <code>Asset</code> code to the <code>Pool.asset</code> field, we can use the
+{ref}<code>--link</code> option:</p>
+<p><code>{eval-rst}
+.. literalinclude:: ../../../Examples/DEFI/LiquidityPool/WithLinking.conf
+   :language: json
+   :caption: :clink:`WithLinking.conf&lt;/DEFI/LiquidityPool/WithLinking.conf&gt;`
+   :emphasize-lines: 8-10
+</code></p>
+<p>The <code>--link Pool:asset=Asset</code> option tells the Prover to assume that the <code>asset</code>
+field of the <code>Pool</code> contract instance in the scene is a pointer to the <code>Asset</code>
+contract instance in the scene.  With this information, the Prover is able to
+resolve the calls to the methods on <code>Pool.asset</code> using the code in <code>Asset.sol</code>.</p>
+<p>With this option, the Prover is no longer able to construct a counterexample to
+the <code>integrityOfDeposit</code> rule, so the rule passes. Note that the external calls
+to the <code>Asset</code> contract no longer appear in the "Call Resolution" tab, because
+the Prover does not report linked calls here.</p>
+<p>(using-example)=</p>
+<h3>Accessing additional contracts from CVL</h3>
+<p>When a contract instance is added to the scene, it is also possible to call
+methods on that contract directly from CVL.  To do so, you need to introduce
+a variable name for the contract instance using
+{ref}<code>the using statement &lt;using-stmt&gt;</code>.  In our running example, we can create
+a variable <code>underlying</code> to refer to the <code>Asset</code> contract instance[^using-position].</p>
+<p>(if any) and before the <code>methods</code> block (if any).</p>
+<p><code>cvl
+using Asset as underlying;
+using Pool as pool;
+</code></p>
+<p>We can then call methods on the contract <code>underlying</code>.  For example, instead of
+adding a special method <code>assetBalance</code> to the <code>Pool</code> contract to call
+<code>asset.balanceOf</code> for us, we can call it directly from the spec:</p>
+<p>``<code>cvl
+///</code>deposit` must increase the pool's underlying asset balance
+rule integrityOfDeposit {</p>
+<pre><code>env e1;
+mathint balance_before = underlying.balanceOf(e1, pool);
+
+env e; uint256 amount;
+require e.msg.sender != pool;
+
+deposit(e, amount);
+
+env e2;
+mathint balance_after = underlying.balanceOf(e2, pool);
+
+assert balance_after == balance_before + amount,
+    "deposit must increase the underlying balance of the pool";
+</code></pre>
+<p>}
+```</p>
+<p>We can simplify this rule in two ways. First, we can declare the
+<code>underlying.balanceOf</code> method <code>envfree</code> to avoid explicitly passing in <code>env</code>
+variables. This works the same way as <code>envfree</code> {ref}<code>declarations for the
+main contract &lt;envfree&gt;</code>, except that you must indicate that the method is for
+the <code>underlying</code> contract instance [^wildcards]:</p>
+<p><code>{eval-rst}
+.. cvlinclude:: ../../../Examples/DEFI/LiquidityPool/certora/specs/pool_link.spec
+   :cvlobject: methods
+   :lines: 12-14
+</code></p>
+<p>also use the contract name: <code>Asset.balanceOf</code>.  You could also write a single
+  entry for all <code>balanceOf</code> methods using <code>_</code> for the contract: <code>_.balanceOf</code>.
+  See {ref}<code>methods-entries</code> for full details.</p>
+<p>The second simplification is that we can use the special variable
+<code>currentContract</code> to refer to the main contract being verified (the one passed
+to {ref}<code>--verify</code>), so we don't need to add the <code>using</code> statement for <code>Pool</code>.
+With these changes, the rule looks as follows:</p>
+<p><code>{eval-rst}
+.. cvlinclude:: ../../../Examples/DEFI/LiquidityPool/certora/specs/pool_link.spec
+   :cvlobject: integrityOfDeposit
+   :caption: :clink:`integrityOfDeposit from pool_link.spec&lt;/DEFI/LiquidityPool/certora/specs/pool_link.spec&gt;`
+</code></p>
+<p>You can run this rule using the
+{clink}<code>WithLinking.conf&lt;/DEFI/LiquidityPool/WithLinking.conf&gt;</code> config file.</p>
+<p>(unknown-contracts)=</p>
+<h2>Working with unknown contracts</h2>
+<p>Linking is appropriate for situations when we know the specific contracts that
+a field points to.  In many cases, however, we <em>don't</em> know what contract an
+address refers to.  For example:</p>
+<ul>
+<li><p>A contract may call a method on a contract address passed in by the user.  In
+our running example, the user may provide any <code>FlashLoanReceiver</code>
+implementation they want to.</p></li>
+<li><p>A contract may be designed to work with many instances of the same interface.
+For example, a pool might be designed to work with arbitrary ERC20
+implementations.</p></li>
+</ul>
+<p>In this case, the only option is to {term}<code>summarize</code> the unknown code for the
+Prover.  Although there are many available types of summaries, the ones most
+commonly used for unknown code are {ref}<code>dispatcher</code>.</p>
+<p>The <code>DISPATCHER</code> summary resolves calls by assuming that the receiver address
+is one of the contracts in the scene that implements the called method.  It
+will try every option, and if any of them can cause a violation, it will
+report a counterexample.</p>
+<p><code>{warning}
+The `DISPATCHER` summary is {term}`unsound`, meaning that using it can cause you
+to hide bugs in your contracts.  Therefore, you should make sure you understand
+the risks before using them.  See {ref}`dispatcher-danger` below.
+</code></p>
+<p>To demonstrate the <code>DISPATCHER</code> summary, let us prove a basic property about
+flash loans.  For example, we might like to show that flash loans can only
+increase the underlying balance of the pool.  We can write the property as
+follows:</p>
+<p><code>{eval-rst}
+.. cvlinclude:: ../../../Examples/DEFI/LiquidityPool/certora/specs/flashLoan_dispatcher.spec
+   :cvlobject: flashLoanIncreasesBalance
+   :caption: :clink:`flashLoanIncreasesBalance&lt;/DEFI/LiquidityPool/certora/specs/flashLoan_dispatcher.spec&gt;`
+</code></p>
+<p>Verifying this rule without any summarization will fail, for the same reasons
+that the first run of <code>integrityOfDeposit</code> above failed:  the <code>flashLoan</code>
+method calls <code>executeOperation</code> on an unknown contract, and the Prover
+constructs a counterexample where <code>executeOperation</code> changes the underlying
+balance.  This is possible because the default <code>HAVOC_ECF</code> summary allows
+<code>executeOperation</code> to do anything to the <code>underlying</code> contract.</p>
+<p>To use a <code>DISPATCHER</code> summary for the <code>executeOperation</code> method, we add it to
+the <code>methods</code> block[^optimistic-dispatcher]:</p>
+<p><code>{eval-rst}
+.. cvlinclude:: ../../../Examples/DEFI/LiquidityPool/certora/specs/flashLoan_dispatcher.spec
+   :cvlobject: methods
+   :lines: 1, 4-5
+</code></p>
+<p>use "optimistic dispatch mode".  Optimistic mode is almost always the right
+  choice; see {ref}<code>dispatcher</code> in the reference manual for full details.</p>
+<p>This summary means that when the Prover encounters an external call to
+<code>receiver.executeOperation(...)</code>, it will try to construct counterexamples
+where the <code>receiver</code> contract is any of the contracts in the scene that
+implement the <code>executeOperation</code> method.  We use the wildcard <code>_</code> as the
+receiver contract so that the summary will apply regardless of the receiver
+contract.</p>
+<p>So far, there are no contracts in the scene that implement the
+<code>executeOperation</code> method, so the Prover will conservatively use a havoc
+summary for the call, and the rule will still fail.  To make use of the
+dispatcher summary, we need to add a contract to the scene that implements the
+method.</p>
+<p>Let's start by adding a trivial receiver
+(in {clink}<code>TrivialReceiver.sol&lt;/DEFI/LiquidityPool/certora/harness/TrivialReceiver.sol&gt;</code>)
+that implements <code>executeOperation</code> but does nothing:</p>
+<p><code>{eval-rst}
+.. literalinclude:: ../../../Examples/DEFI/LiquidityPool/certora/harness/TrivialReceiver.sol
+   :language: solidity
+   :caption: :clink:`TrivialReceiver.sol&lt;/DEFI/LiquidityPool/certora/harness/TrivialReceiver.sol&gt;`
+   :lines: 5-
+</code></p>
+<p>Adding <code>TrivialReceiver.sol</code> to the scene allows the Prover to dispatch to it.
+To run, use the {clink}<code>FlashLoanTrivial.conf&lt;/DEFI/LiquidityPool/FlashLoanTrivial.conf&gt;</code>
+config file.</p>
+<p>With this dispatcher in place, the rule passes. Examining the call resolution
+tab shows that the Prover used the dispatcher summary for <code>executeOperation</code>
+and considered only <code>TrivialReceiver.executeOperation</code> as a possible
+implementation:</p>
+<p><img alt='Call resolution tab showing &lt;code&gt;Pool.flashLoan&lt;/code&gt; summarized with a Dispatcher.
+The "alternatives" list contains &lt;code&gt;[TrivialReceiver.executeOperation]&lt;/code&gt;' src="trivial-resolution.png"/></p>
+<p>Although the rule passes, it is important to pause and think about what we have
+proved; the next section shows that we shouldn't rest easy yet.</p>
+<p>(dispatcher-danger)=</p>
+<h3>The dangers of <code>DISPATCHER</code></h3>
+<p>What we have proved so far is that <em>if</em> the only possible <code>FlashLoanReceiver</code>
+is <code>TrivialReceiver</code>, <em>then</em> the pool's underlying balance doesn't decrease.
+However, we have not proved that the underlying balance <em>never</em> decreases after
+a flash loan.</p>
+<p>Since the <code>DISPATCHER</code> summary only considers the contracts you provide as
+possible implementations, it forces you to think about a threat model: the set
+of behaviors that you want to protect against.  If there is a clever way to
+construct a receiver contract that violates the rule, but you don't think of
+it, the Prover won't be able to find it.  So far, we were able to prove the
+rule, but only with a very weak threat model: we assume that the flash loan
+receiver does nothing.</p>
+<p>In fact, we can easily construct a flash loan receiver that decreases the
+pool's underlying balance.  For example, if the receiver somehow got an
+approval to transfer underlying tokens away from the pool, it could just
+transfer them, thereby decreasing the underlying balance of the pool.
+We can write such a receiver:</p>
+<p><code>{eval-rst}
+.. literalinclude:: ../../../Examples/DEFI/LiquidityPool/certora/harness/TransferReceiver.sol
+   :language: solidity
+   :caption: :clink:`TransferReceiver.sol&lt;/DEFI/LiquidityPool/certora/harness/TransferReceiver.sol&gt;`
+   :lines: 6-
+</code></p>
+<p>Note that this isn't a complete working example; we haven't provided a
+constructor, or linked the <code>pool</code> address to the actual pool, or any way to
+ensure that the pool has given the receiver an allowance.  Nevertheless, if we
+add it to the scene, the Prover is able to use it to construct a
+counterexample. Since the Prover explores every possible value of the <code>pool</code>
+variable, and every possible value for the underlying's allowances, it is able
+to set up the details of the counterexample automatically.</p>
+<p>We do need to do one more piece of setup to get this receiver to work the way
+we'd like. If we just add <code>TransferReceiver</code> to the scene, the Prover will not
+be able to resolve its call to <code>transferFrom</code>.  This will cause the same kind
+of havoc we saw above. We could remedy this using a <code>DISPATCHER</code> summary for
+<code>transferFrom</code> (see {ref}<code>erc20-dispatcher</code>), but for now, we'll simply
+link the <code>underlying</code> variable to the <code>Asset</code> contract instance:</p>
+<p><code>{eval-rst}
+.. literalinclude:: ../../../Examples/DEFI/LiquidityPool/FlashLoanTransfer.conf
+   :language: json
+   :caption: :clink:`FlashLoanTransfer.conf&lt;/DEFI/LiquidityPool/FlashLoanTransfer.conf&gt;`
+   :emphasize-lines: 10-13
+</code></p>
+<p>With the additional receiver implementation on the scene, we see that the Prover
+considers both alternatives for the <code>executeOperation</code> call:</p>
+<p><img alt='Call resolution tab showing unresolved call from &lt;code&gt;Pool.flashLoan&lt;/code&gt; to
+  &lt;code&gt;executeOperation&lt;/code&gt;, with the "alternatives" set containing both
+  &lt;code&gt;TransferReceiver.executeOperation&lt;/code&gt; and &lt;code&gt;TrivialReceiver.executeOperation&lt;/code&gt;' src="transfer-resolution.png"/></p>
+<p>And we also see that it was able to use the <code>TransferReceiver</code> to construct a
+counterexample:</p>
+<p><img alt="Partial call trace showing &lt;code&gt;executeOperation&lt;/code&gt; dispatched to
+  &lt;code&gt;TransferReceiver.executeOperation&lt;/code&gt;, which calls
+  &lt;code&gt;transferFrom(Pool,TransferReceiver,2)&lt;/code&gt;" src="transfer-trace.png"/></p>
+<p>As we expected, the dispatcher for <code>executeOperation</code> chooses
+<code>TransferReceiver.executeOperation</code> as the receiver, which in turn calls
+<code>underlying.transferFrom(Pool, ..., 2)</code>.  If we look in the initial storage of the contract,
+we see that the Prover chose the pool's allowance for the recipient to be
+<code>10</code>:</p>
+<p><img alt="Call trace entry showing &lt;code&gt;_allowance[Pool][TransferReceiver]&lt;/code&gt; returning &lt;code&gt;10&lt;/code&gt;" src="transfer-allowance.png"/></p>
+<p>It turns out that this particular violation can't actually happen, because the
+pool contract never approves any other contract to transfer its funds.  We
+could prove an invariant to this effect and add it to our rule using
+{ref}<code>requireInvariant</code>.</p>
+<p>For more examples of <code>requireInvariant</code> usage, check out the <a href="../patterns/require-invariants.md">user guide</a>.</p>
+<p>Nevertheless, this example shows that having too few dispatchees can cause a
+rule to pass, even though the property it describes is not necessarily true in
+all situations.</p>
+<h3>Designing flexible dispatchees</h3>
+<p>The <code>TransferReceiver</code> described in the previous section is fairly targeted: we
+thought of a way to violate the rule, and then designed a receiver contract to
+cause the violation.  However, one of the main benefits of the Prover is that
+you don't have to know in advance the attacks you're trying to prevent, and
+this approach to creating dispatchees loses that benefit.</p>
+<p>There is a clever trick you can use to write flexible dispatchees that can
+cover a broad range of potential attacks.  The trick relies on the fact that the
+Prover will consider all possible values for contract fields when trying to
+produce a counterexample.</p>
+<p>Suppose we wanted to reason about the possibility that a flash loan receiver
+could make non-view calls back to the pool from <code>executeOperation</code>.  We could
+write a separate receiver contract for each method which just calls that method,
+and add them all to the scene as potential dispatchees.  However, this can
+become cumbersome, especially if there are multiple methods that need to be
+implemented.</p>
+<p>Instead, we can write a single receiver that simulates all of these potential
+method calls.  Let's start by getting a list of the external methods of the
+contract.  The Prover helpfully provides such a list whenever we verify a rule[^noview]:</p>
+<p><img alt='"Contract list" tab (next to the "Results" tab) showing the &lt;code&gt;Pool&lt;/code&gt; contract
+  and all of its methods' src="pool-methods.png"/></p>
+<p>the source code to determine which ones are non-view functions.</p>
+<p>Now, we can write an <code>executeOperation</code> method that could call any of the
+non-view functions.  We can do this with a big <code>if</code>-<code>then</code>-<code>else</code> statement (
+:clink:<code>full contract&lt;/DEFI/LiquidityPool/certora/harness/FlexibleReceiver.sol&gt;</code>)[^no-recursion]:</p>
+<p>```solidity
+contract FlexibleReceiver is IFlashLoanReceiver {
+    IPool token;</p>
+<pre><code>function executeOperation(...) ... {
+    uint  callbackChoice = ...;
+
+    if (callbackChoice == 0)
+        token.deposit(...);
+    else if (callbackChoice == 1)
+        token.transferFrom(...);
+    else if (callbackChoice == 2)
+        token.withdraw(...);
+    ...
+    else
+        assert(false, "invalid callbackChoice value");
+
+    return ...;
+}
+</code></pre>
+<p>}
+```</p>
+<p>cause potentially infinite recursion, which will cause the Prover to fail.</p>
+<p>The value of the <code>callbackChoice</code> variable determines which <code>Pool</code> method
+<code>executeOperation</code> will call. We would like the Prover to consider every
+possible value of the <code>callbackChoice</code> field, so that it can choose to call any
+of the pool's methods. We would also like the Prover to consider every choice
+of arguments to these method calls.</p>
+<p>For this to be valid solidity code, we need to actually give values to the
+<code>callbackChoice</code> and the arguments to the called methods. To do this, we use a
+clever trick. Since the Prover considers every possible value for storage
+variables, we can simply use a storage variable for <code>callbackChoice</code> and for
+the arguments. For example, we could write</p>
+<p>```solidity
+contract FlexibleReceiver is IFlashLoanReceiver {
+    ...</p>
+<pre><code>uint arbitraryCallback;
+function executeOperation(...) ... {
+    uint callbackChoice = arbitraryCallback;
+
+    ...
+}
+</code></pre>
+<p>}
+```</p>
+<p>The Prover will consider cases where <code>arbitraryCallback</code> can have any possible
+value at the beginning of the rule, and we can use this arbitrary value to fill
+in <code>callbackChoice</code>[^arbitrary-constructor].</p>
+<p>checks for invariants, since storage is always initialized to zero at the
+  start of a constructor.</p>
+<p>One potential drawback of this choice is that the receiver contract will make
+the same callback every time <code>executeOperation</code> is called within a rule.  We can
+relax this restriction by using a mapping of arbitrary values instead of a
+single callback:</p>
+<p>```solidity
+contract FlexibleReceiver is IFlashLoanReceiver {
+    ...</p>
+<pre><code>uint counter;
+mapping(uint =&gt; uint) arbitraryCallbacks;
+
+function executeOperation(...) ... {
+    uint  callbackChoice = arbitraryCallbacks[counter++];
+
+    ...
+}
+</code></pre>
+<p>}
+```</p>
+<p>With this version, the Prover is able to choose a new value of
+<code>arbitraryCallbacks[i]</code> for each <code>i</code>; since the <code>counter</code> variable is updated
+on each call, this means that it can choose a different value of
+<code>callbackChoice</code> for each call.</p>
+<p>The abstract contract {clink}<code>ArbitraryValues&lt;/DEFI/LiquidityPool/certora/helpers/ArbitraryValues.sol&gt;</code>
+makes this simple. For each value type, it provides an <code>arbitraryType()</code> method that
+returns an undefined value that the Prover can fill in arbitrarily as it is
+constructing counterexamples.  For example, the <code>arbitraryInt192()</code> method
+returns a newly selected <code>int192</code> each time it called.  In this case, we can
+use the <code>arbitraryUint</code> and <code>arbitraryAddress</code> methods to choose the callback
+and the arguments (conf file {clink}<code>WithFlexibleLinked.conf&lt;/DEFI/LiquidityPool/WithFlexibleLinked.conf&gt;</code>).</p>
+<p><code>{eval-rst}
+.. literalinclude:: ../../../Examples/DEFI/LiquidityPool/certora/harness/FlexibleReceiver.sol
+   :language: solidity
+   :caption: :clink:`FlexibleReceiver.sol&lt;/DEFI/LiquidityPool/certora/harness/FlexibleReceiver.sol&gt;`
+   :lines: 7-
+</code></p>
+<p>With this implementation, the Prover will consider every possible value for
+<code>callbackChoice</code> as well as for the arguments to the methods, which has the
+effect of calling an arbitrary non-view method on <code>pool</code> with arbitrary
+arguments.</p>
+<p>This approach still doesn't give perfect coverage.  If the <code>token</code> field is
+linked to the pool, it will only call methods on the pool.  In fact, this
+receiver will miss the violation that the <code>TransferReceiver</code> uncovered, because
+that requires calling <code>transferFrom</code> on the <code>Asset</code> rather than the <code>Pool</code>,
+although this particular shortcoming can be
+addressed by {ref}<code>using a dispatcher for the ERC20 methods &lt;erc20-dispatcher&gt;</code>
+instead of linking to the pool.</p>
+<p>Another important caveat is that this technique does not work for initial state
+checks for invariants.  In this case, the Prover does not choose arbitrary
+values for storage variables, since it knows that storage variables are all
+initialized to 0 before the constructor call.  Therefore, the <code>arbitraryType()</code>
+methods will always return 0.</p>
+<p>A third shortcoming with this implementation is that it only makes one
+reentrant call to the <code>token</code> contract.  Vulnerabilities that require two or
+more callbacks from the <code>FlashLoanReceiver</code> to exploit will not be detected.</p>
+<p>Nevertheless, this technique is a useful way to build dispatchers that get
+pretty good coverage without requiring too much prediction of the bugs they
+will find.  The <code>ArbitraryValues</code> helper contract makes this pattern easy to
+implement.</p>
+<p>(erc20-dispatcher)=</p>
+<h3>Using <code>DISPATCHER</code> for ERC20 contracts</h3>
+<p>One very common use case for the material discussed in this chapter is when a
+contract is designed to work with arbitrary ERC20 tokens.  In this case, it is
+common to summarize all of the ERC20 methods using <code>DISPATCHER</code> summaries, and
+to provide several ERC20 implementations to the Prover.</p>
+<p>To facilitate this, the {clink}<code>helpers&lt;/DEFI/LiquidityPool/certora/helpers/&gt;</code>
+directory of the example code contains a
+{clink}<code>spec file called erc20.spec&lt;/DEFI/LiquidityPool/certora/helpers/erc20.spec&gt;</code>
+as well as a variety of ERC20 token implementations
+(inside {clink}<code>tokens&lt;/DEFI/LiquidityPool/certora/helpers/tokens&gt;</code> folder).
+The <code>erc20.spec</code> file simply contains a methods block that summarizes all of the
+ERC20 methods as <code>DISPATCHER</code>.  You can use an
+{doc}<code>import statement &lt;/docs/cvl/imports&gt;</code> to include this in your spec:</p>
+<p><code>cvl
+import "../helpers/erc20.spec";
+</code></p>
+<p>This gives a concise way to handle this situation.  Be sure to include the
+tokens in the scene!</p>
+<h2>Conclusion</h2>
+<p>In this chapter, we've seen several techniques for handling inter-contract
+calls.  Linking allows us to give the source code for a contract referenced by
+a particular field.  <code>DISPATCHER</code> summaries instruct the Prover to consider
+several possible implementations of a contract, and can be used when we don't
+know exactly which contract an address will refer to.</p>
+<p>We've seen that <code>DISPATCHER</code> summaries are not completely safe — they
+constrain the possible implementations of external contracts, so they may miss
+bugs that those implementations don't trigger.  However, we have seen a useful
+technique that can explore a wide range of behaviors with little effort.</p>
+</body></html>

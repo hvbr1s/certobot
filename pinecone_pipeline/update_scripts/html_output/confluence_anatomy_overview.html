@@ -1,0 +1,114 @@
+<h1>Overview</h1>
+<p>A specification file is made up of several parts, each of which serves some purpose to interact with a contract or refine specifications in some way. The following shows an overview of the different parts of a specification file.</p>
+<p>```cvl</p>
+<hr/>
+<ul>
+<li>IMPORTS/SETUP                                                  *</li>
+</ul>
+<hr/>
+<p>methods {
+    some<em>function</em>from<em>the</em>contract(address) returns (uint256)
+}</p>
+<hr/>
+<ul>
+<li>USEFUL CONSTRUCTS.                                             *</li>
+</ul>
+<hr/>
+<p>// advanced use for SMT speedup with ghosts
+sort MyUninterpretedSort;</p>
+<p>// uninterpreted functions, useful for describing contract state
+ghost myGhostFunction(uint256, address) returns bool {
+  axiom forall uint256 n. myGhostFunction(n, 0x0) == false;
+}</p>
+<p>// a way to interact with state changes in the contract via storage
+// reads and writes
+hook Sstore my<em>storage</em>mapping[KEY address key] uint256 value {
+  havoc myGhostFunction assuming myGhostFunction@new(value, key);
+}</p>
+<p>// encapsulation of some commonly reused computation
+function myCVLFunction(uint256 x, uint256 y) returns uint256 {
+  if (x &gt; y) {
+    return x - y;
+  } else {
+    return y - x;
+  }
+}</p>
+<hr/>
+<ul>
+<li>MEAT AND POTATOES:                                             *</li>
+</ul>
+<hr/>
+<p>// the basic unit of a spec: the rule is how we actually specify
+// behavior, typically by
+// 1. making some assumptions on "unconstrained" variables
+// 2. invoking a contract function
+// 3. making some assertion about the result of that function
+rule my<em>rule(address a) {
+  require a != owner();
+  some</em>function<em>from</em>the_contract(a);
+  assert lastReverted;
+}</p>
+<p>// like super-rules, these automatically generate a base-case
+// and inductive case for inductive invariants (rules are only
+// really equipped to handle the inductive case)
+invariant address<em>zero</em>gets<em>nothing</em>ever() 
+    some<em>function</em>from<em>the</em>contract(0) == 0
+```</p>
+<html><head><meta content="https://github.com/Certora/Documentation/confluence/anatomy/overview.md" name="source"/><meta content="https://github.com/Certora/Documentation/confluence/anatomy/overview.md" name="url"/><meta content="No Title Found" name="title"/><meta content="Overview
+A specification file is made up of several parts, each of which serves some purpose to interact with a contract or refine specifications in some way. The following shows an overview of the di" name="text"/></head><body><div style="background-color: #f0f0f0; padding: 10px; margin-bottom: 20px;">Source: https://github.com/Certora/Documentation/confluence/anatomy/overview.md</div><h1>Overview</h1>
+<p>A specification file is made up of several parts, each of which serves some purpose to interact with a contract or refine specifications in some way. The following shows an overview of the different parts of a specification file.</p>
+<p>```cvl</p>
+<hr/>
+<ul>
+<li>IMPORTS/SETUP                                                  *</li>
+</ul>
+<hr/>
+<p>methods {
+    some<em>function</em>from<em>the</em>contract(address) returns (uint256)
+}</p>
+<hr/>
+<ul>
+<li>USEFUL CONSTRUCTS.                                             *</li>
+</ul>
+<hr/>
+<p>// advanced use for SMT speedup with ghosts
+sort MyUninterpretedSort;</p>
+<p>// uninterpreted functions, useful for describing contract state
+ghost myGhostFunction(uint256, address) returns bool {
+  axiom forall uint256 n. myGhostFunction(n, 0x0) == false;
+}</p>
+<p>// a way to interact with state changes in the contract via storage
+// reads and writes
+hook Sstore my<em>storage</em>mapping[KEY address key] uint256 value {
+  havoc myGhostFunction assuming myGhostFunction@new(value, key);
+}</p>
+<p>// encapsulation of some commonly reused computation
+function myCVLFunction(uint256 x, uint256 y) returns uint256 {
+  if (x &gt; y) {
+    return x - y;
+  } else {
+    return y - x;
+  }
+}</p>
+<hr/>
+<ul>
+<li>MEAT AND POTATOES:                                             *</li>
+</ul>
+<hr/>
+<p>// the basic unit of a spec: the rule is how we actually specify
+// behavior, typically by
+// 1. making some assumptions on "unconstrained" variables
+// 2. invoking a contract function
+// 3. making some assertion about the result of that function
+rule my<em>rule(address a) {
+  require a != owner();
+  some</em>function<em>from</em>the_contract(a);
+  assert lastReverted;
+}</p>
+<p>// like super-rules, these automatically generate a base-case
+// and inductive case for inductive invariants (rules are only
+// really equipped to handle the inductive case)
+invariant address<em>zero</em>gets<em>nothing</em>ever() 
+    some<em>function</em>from<em>the</em>contract(0) == 0
+```</p>
+</body></html>

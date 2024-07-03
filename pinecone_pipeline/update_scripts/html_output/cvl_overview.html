@@ -1,0 +1,106 @@
+<h1>Specification Files</h1>
+<p>The Certora Prover verifies that a smart contract satisfies a set of rules
+written in a language called Certora Verification Language (CVL).  The syntax
+of CVL is similar to Solidity, but CVL contains additional features
+that are useful for writing specifications.</p>
+<p>A spec may contain any of the following:</p>
+<ul>
+<li><p><strong><a href="imports">Import statements</a>:</strong> CVL files can import the contents of other CVL files.</p></li>
+<li><p><strong><a href="imports">Use statements</a>:</strong> A <code>use</code> statement instructs the Certora Prover to check
+a rule that is imported from another spec or from the built-in rules.</p></li>
+<li><p><strong><a href="using">Using statements</a>:</strong> Using statements allow a specification to reference
+multiple contracts.</p></li>
+<li><p><strong><a href="methods">Methods blocks</a>:</strong> <code>methods</code> blocks contain information on how methods
+should be summarized by the Prover during verification.</p></li>
+<li><p><strong><a href="rules-main">Rules</a>:</strong> A rule describes the expected behavior of the methods of a
+contract.</p></li>
+<li><p><strong>{ref}<code>invariants</code>:</strong> Invariants describe facts about the state of a contract that
+should always be true.</p></li>
+<li><p><strong><a href="functions">Functions</a>:</strong> CVL functions contain CVL code that can be reused throughout the spec.</p></li>
+<li><p><strong><a href="defs">Definitions</a>:</strong> CVL definitions contain CVL expressions that can be reused throughout the spec.</p></li>
+<li><p><strong><a href="sorts">Sorts</a>:</strong> Sorts define simple types that can be compared for equality.</p></li>
+<li><p><strong><a href="ghosts-doc">Ghosts</a>:</strong> Ghosts define additional variables that can be used to keep track
+of state changes in the contracts.</p></li>
+<li><p><strong>{ref}<code>Hooks &lt;hooks&gt;</code>:</strong> Hooks allow the specification to instrument the contracts being
+verified to insert additional CVL code when various instructions are executed.</p></li>
+</ul>
+<p>The remainder of this chapter describes the syntax and semantics of a
+specification file in detail.</p>
+<p>(ebnf-syntax)=</p>
+<h2>Syntactic Conventions</h2>
+<p>Many of the pages in this guide describe the syntax of parts of the Certora
+Verification Language using a modified version of the <a href="https://en.wikipedia.org/wiki/Extended_Backus%E2%80%93Naur_form">EBNF format</a>.</p>
+<p>When reading the syntax blocks, keep the following in mind:</p>
+<ul>
+<li><p>Text in double quotes is a terminal that matches the exact string.
+For example, <code>"ghost"</code> matches <code>ghost</code>, and <code>"."</code> matches <code>.</code></p></li>
+<li><p>Names that are not in double quotes are nonterminals that refers to other
+parts of the grammar.  For example, <code>number</code> matches <code>1</code> or <code>2</code> or <code>372</code>.</p></li>
+<li><p>Multiple items placed next to each other can be separated
+by whitespace.  For example, <code>"pragma" "specify" number "." number</code> matches <code>pragma specify 1.5</code>
+and also <code>pragma     specify 0.3</code>.  Note that this is different from the
+EBNF format described in the link above (that format would add a comma between items).</p></li>
+<li><p>An item surrounded by square brackets is optional.  For example, <code>"pragma" "specify" number [ "." number ]</code>
+matches <code>pragma specify 3.1</code> and also matches <code>pragma specify 3</code>.</p></li>
+<li><p>An item surrounded by curly braces may be repeated 0 or more times.  For example,
+<code>number { "." number }</code> matches <code>3</code> and <code>3.1</code> and <code>3.1.4.1.5</code></p></li>
+<li><p>Items separated by a vertical bar represent different alternatives.  For example,
+<code>"use" "rule" id | "use" "invariant" id | "use" "builtin" "rule" id</code> matches
+<code>use rule foo</code> and also matches <code>use invariant bar</code> but does not match
+<code>use rule foo use invariant bar</code>.</p></li>
+</ul>
+<html><head><meta content="https://github.com/Certora/Documentation/cvl/overview.md" name="source"/><meta content="https://github.com/Certora/Documentation/cvl/overview.md" name="url"/><meta content="No Title Found" name="title"/><meta content="Specification Files
+The Certora Prover verifies that a smart contract satisfies a set of rules
+written in a language called Certora Verification Language (CVL).  The syntax
+of CVL is similar to Solidi" name="text"/></head><body><div style="background-color: #f0f0f0; padding: 10px; margin-bottom: 20px;">Source: https://github.com/Certora/Documentation/cvl/overview.md</div><h1>Specification Files</h1>
+<p>The Certora Prover verifies that a smart contract satisfies a set of rules
+written in a language called Certora Verification Language (CVL).  The syntax
+of CVL is similar to Solidity, but CVL contains additional features
+that are useful for writing specifications.</p>
+<p>A spec may contain any of the following:</p>
+<ul>
+<li><p><strong><a href="imports">Import statements</a>:</strong> CVL files can import the contents of other CVL files.</p></li>
+<li><p><strong><a href="imports">Use statements</a>:</strong> A <code>use</code> statement instructs the Certora Prover to check
+a rule that is imported from another spec or from the built-in rules.</p></li>
+<li><p><strong><a href="using">Using statements</a>:</strong> Using statements allow a specification to reference
+multiple contracts.</p></li>
+<li><p><strong><a href="methods">Methods blocks</a>:</strong> <code>methods</code> blocks contain information on how methods
+should be summarized by the Prover during verification.</p></li>
+<li><p><strong><a href="rules-main">Rules</a>:</strong> A rule describes the expected behavior of the methods of a
+contract.</p></li>
+<li><p><strong>{ref}<code>invariants</code>:</strong> Invariants describe facts about the state of a contract that
+should always be true.</p></li>
+<li><p><strong><a href="functions">Functions</a>:</strong> CVL functions contain CVL code that can be reused throughout the spec.</p></li>
+<li><p><strong><a href="defs">Definitions</a>:</strong> CVL definitions contain CVL expressions that can be reused throughout the spec.</p></li>
+<li><p><strong><a href="sorts">Sorts</a>:</strong> Sorts define simple types that can be compared for equality.</p></li>
+<li><p><strong><a href="ghosts-doc">Ghosts</a>:</strong> Ghosts define additional variables that can be used to keep track
+of state changes in the contracts.</p></li>
+<li><p><strong>{ref}<code>Hooks &lt;hooks&gt;</code>:</strong> Hooks allow the specification to instrument the contracts being
+verified to insert additional CVL code when various instructions are executed.</p></li>
+</ul>
+<p>The remainder of this chapter describes the syntax and semantics of a
+specification file in detail.</p>
+<p>(ebnf-syntax)=</p>
+<h2>Syntactic Conventions</h2>
+<p>Many of the pages in this guide describe the syntax of parts of the Certora
+Verification Language using a modified version of the <a href="https://en.wikipedia.org/wiki/Extended_Backus%E2%80%93Naur_form">EBNF format</a>.</p>
+<p>When reading the syntax blocks, keep the following in mind:</p>
+<ul>
+<li><p>Text in double quotes is a terminal that matches the exact string.
+For example, <code>"ghost"</code> matches <code>ghost</code>, and <code>"."</code> matches <code>.</code></p></li>
+<li><p>Names that are not in double quotes are nonterminals that refers to other
+parts of the grammar.  For example, <code>number</code> matches <code>1</code> or <code>2</code> or <code>372</code>.</p></li>
+<li><p>Multiple items placed next to each other can be separated
+by whitespace.  For example, <code>"pragma" "specify" number "." number</code> matches <code>pragma specify 1.5</code>
+and also <code>pragma     specify 0.3</code>.  Note that this is different from the
+EBNF format described in the link above (that format would add a comma between items).</p></li>
+<li><p>An item surrounded by square brackets is optional.  For example, <code>"pragma" "specify" number [ "." number ]</code>
+matches <code>pragma specify 3.1</code> and also matches <code>pragma specify 3</code>.</p></li>
+<li><p>An item surrounded by curly braces may be repeated 0 or more times.  For example,
+<code>number { "." number }</code> matches <code>3</code> and <code>3.1</code> and <code>3.1.4.1.5</code></p></li>
+<li><p>Items separated by a vertical bar represent different alternatives.  For example,
+<code>"use" "rule" id | "use" "invariant" id | "use" "builtin" "rule" id</code> matches
+<code>use rule foo</code> and also matches <code>use invariant bar</code> but does not match
+<code>use rule foo use invariant bar</code>.</p></li>
+</ul>
+</body></html>

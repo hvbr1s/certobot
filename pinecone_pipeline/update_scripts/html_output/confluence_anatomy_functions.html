@@ -1,0 +1,46 @@
+<h1>CVL Functions</h1>
+<p>A CVL Function provides basic encapsulation for code reuse in a specification. If there is a common set of assumptions or assertions used in several rules, a CVL Function would be an apt place to group those together. Additionally they can be used for basic calculations.</p>
+<h2>Syntax</h2>
+<p>Function with no return:</p>
+<p><code>cvl
+function my_function(address a, uint256 n) {
+  require isValidAddress(a);
+  require balance(a) &gt;= n;
+}
+</code></p>
+<p>Function with a return:</p>
+<p><code>cvl
+function abs_value_difference(uint256 x, uint256 y) returns uint256 {
+  if (x &lt; y) {
+    return y - x;
+  } else {
+    return x - y;
+  }
+}
+</code></p>
+<h2>Using a CVL Function</h2>
+<p>CVL Function may be called from within a <strong>rule</strong>, or from within another <strong>CVL Function</strong>.</p>
+<html><head><meta content="https://github.com/Certora/Documentation/confluence/anatomy/functions.md" name="source"/><meta content="https://github.com/Certora/Documentation/confluence/anatomy/functions.md" name="url"/><meta content="Syntax" name="title"/><meta content="CVL Functions
+A CVL Function provides basic encapsulation for code reuse in a specification. If there is a common set of assumptions or assertions used in several rules, a CVL Function would be an apt" name="text"/></head><body><div style="background-color: #f0f0f0; padding: 10px; margin-bottom: 20px;">Source: https://github.com/Certora/Documentation/confluence/anatomy/functions.md</div><h1>CVL Functions</h1>
+<p>A CVL Function provides basic encapsulation for code reuse in a specification. If there is a common set of assumptions or assertions used in several rules, a CVL Function would be an apt place to group those together. Additionally they can be used for basic calculations.</p>
+<h2>Syntax</h2>
+<p>Function with no return:</p>
+<p><code>cvl
+function my_function(address a, uint256 n) {
+  require isValidAddress(a);
+  require balance(a) &gt;= n;
+}
+</code></p>
+<p>Function with a return:</p>
+<p><code>cvl
+function abs_value_difference(uint256 x, uint256 y) returns uint256 {
+  if (x &lt; y) {
+    return y - x;
+  } else {
+    return x - y;
+  }
+}
+</code></p>
+<h2>Using a CVL Function</h2>
+<p>CVL Function may be called from within a <strong>rule</strong>, or from within another <strong>CVL Function</strong>.</p>
+</body></html>

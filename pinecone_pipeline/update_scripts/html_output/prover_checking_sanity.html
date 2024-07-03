@@ -1,0 +1,348 @@
+<h1>Rule Sanity Checks</h1>
+<p>The {ref}<code>--rule_sanity</code> option enables some automatic checks that can warn users
+about certain classes of mistakes in specifications.</p>
+<p>There are several kinds of sanity checks:</p>
+<ul>
+<li>{ref}<code>sanity-vacuity</code> determine whether rules pass {term}<code>vacuously &lt;vacuous&gt;</code> because they rule out all {term}<code>models &lt;model&gt;</code>.</li>
+<li>{ref}<code>sanity-assert-tautology</code> determine whether individual <code>assert</code> statements are {term}<code>tautologies &lt;tautology&gt;</code>.</li>
+<li>{ref}<code>sanity-trivial-invariant</code> detect invariants that hold in all states, rather than just reachable states.</li>
+<li>{ref}<code>sanity-assert-structure</code> detect unnecessarily complex <code>assert</code> statements.</li>
+<li>{ref}<code>sanity-redundant-require</code> detect unnecessary <code>require</code> statements.</li>
+</ul>
+<p>The <code>--rule_sanity</code> option may be followed by one of <code>none</code>, <code>basic</code>, or
+<code>advanced</code> options to control which sanity checks should be executed:
+ * With <code>--rule_sanity none</code> or without passing <code>--rule_sanity</code>, no sanity
+   checks are performed.
+ * With <code>--rule_sanity basic</code> or just <code>--rule_sanity</code> without a mode, the
+   vacuity check and the trivial invariant check are performed.
+ * With <code>--rule_sanity advanced</code>, all the sanity checks will be performed for
+   all invariants and rules.</p>
+<p>We recommend starting with the <code>basic</code> mode, since not all rules flagged by the
+<code>advanced</code> mode are incorrect.</p>
+<p>When the Prover is run with any of these options, it first checks that the rule
+passes; if it does pass then the sanity checks are performed.  If the sanity
+checks also pass, the rule is marked as verified with a green checkmark; if the
+sanity check fails, the rule is marked with a yellow symbol:</p>
+<p><img alt="Screenshot of rule report showing a passing rule, a failing rule, and a sanity failure" src="sanity-icons.png"/></p>
+<p>If a sanity check fails, you can expand the problems view to see the details
+of the failure:</p>
+<p><img alt="Screenshot of rule report showing the expanded details of a sanity failure" src="sanity-details.png"/></p>
+<p>The remainder of this document describes these checks in detail.</p>
+<p>(sanity-vacuity)=</p>
+<h2>Vacuity checks</h2>
+<p>The <strong>vacuity</strong> sanity check ensures that even when ignoring all the
+user-provided assertions, the end of the rule is reachable. This check ensures
+that that the combination of <code>require</code> statements does not rule out all
+possible counterexamples.  Rules that rule out all possible counterexamples
+are called {term}<code>vacuous</code> rules.  Since they don't actually check any
+assertions, they are almost certainly incorrect.</p>
+<p>For example, the following rule would be flagged by the vacuity check:
+<code>cvl
+rule vacuous {
+    uint x;
+    require x &gt; 2;
+    require x &lt; 1;
+    assert f(x) == 2, "f must return 2";
+}
+</code></p>
+<p>Since there are no models satisfying both <code>x &gt; 2</code> and <code>x &lt; 1</code>, this rule
+will always pass, regardless of the behavior of the contract.  This is an
+example of a {term}<code>vacuous</code> rule — one that passes only because the
+preconditions are contradictory.</p>
+<p>The vacuity check also flags situations where counterexamples are ruled
+out for reasons other than <code>require</code> statements.  A common example comes from
+reusing <code>env</code> variables.  Consider the following poorly-written rule:</p>
+<p>```cvl
+env e; uint amount; address recipient;</p>
+<p>require balanceOf(recipient) == 0;
+require amount &gt; 0;</p>
+<p>deposit(e, amount);
+transfer(e, recipient, amount);</p>
+<p>assert balanceOf(recipient) &gt; 0,
+    "depositing and then transferring makes recipient's balance positive";
+```</p>
+<p>Although it looks like this rule is reasonable, it may actually be vacuous.
+The problem is that the environment <code>e</code> is reused, and in particular
+<code>e.msg.value</code> is the same in the calls to <code>deposit</code> and <code>transfer</code>.  Since
+<code>transfer</code> is not payable, it will always revert if <code>e.msg.value != 0</code>.  On the
+other hand, <code>deposit</code> always reverts when <code>e.msg.value == 0</code>.  Therefore every
+example will either cause <code>deposit</code> or <code>transfer</code> to revert, so there are no
+models that reach the <code>assert</code> statement.</p>
+<p>(sanity-assert-tautology)=</p>
+<h2>Assert tautology checks</h2>
+<p>The <strong>assert tautology</strong> sanity check ensures that individual <code>assert</code> statements
+are not {term}<code>tautologies &lt;tautology&gt;</code>.  A tautology is a statement that is
+true on all examples, even if all the <code>require</code> and <code>if</code> conditions are
+removed. Tautology checks also consider the bodies of the contract functions. For
+example, <code>assert square(x) &gt;= 0;</code> is a tautology if <code>square</code> is a contract
+function that squares its input.</p>
+<p>For example, the following rule would be flagged by the assert tautology check:</p>
+<p><code>cvl
+rule tautology {
+  uint x; uint y;
+  require x != y;
+  ...
+  assert x &lt; 2 || x &gt;= 2,
+   "x must be smaller than 2 or greater than or equal to 2";
+}
+</code></p>
+<p>Since every <code>uint</code> satisfies the assertion, the assertion is tautological, which
+may indicate an error in the specification.</p>
+<p>(sanity-trivial-invariant)=</p>
+<h2>Trivial invariant checks</h2>
+<p>The <strong>Trivial invariant</strong> sanity check ensures that invariants are not trivial.
+A trivial invariant is one that holds in all possible states, not just in
+reachable states.</p>
+<p>For example, the following invariant is trivial:</p>
+<p><code>cvl
+invariant squaresNonNeg(int x)
+    x * x &gt;= 0
+</code></p>
+<p>While it does hold in every reachable state, it also holds in every
+non-reachable state.  Therefore it could be more efficiently checked as a rule:</p>
+<p><code>cvl
+rule squaresNonNeg(int x) {
+    assert x * x &gt;= 0;
+}
+</code></p>
+<p>The rule version is more efficient because it can do a single check in an
+arbitrary state rather than separately checking states after arbitrary method
+invocations.</p>
+<p>(sanity-assert-structure)=</p>
+<h2>Assertion structure checks</h2>
+<p>The <strong>assertion structure</strong> sanity check ensures that complex assert statements
+can't be replaced with simpler ones.</p>
+<p>If an assertion expression is more complex than necessary, it can pass for
+misleading reasons.  For example, consider the following assertion:</p>
+<p><code>cvl
+uint x;
+assert (x &lt; 5) =&gt; (x &gt;= 0);
+</code></p>
+<p>In this case, the assertion is true, but only because <code>x</code> is a <code>uint</code> and is
+therefore <em>always</em> non-negative.  The fact that <code>x &gt;= 0</code> has nothing to do with
+the fact that <code>x &lt; 5</code>.  Therefore this complex assertion could be replaced with
+the more informative assertion <code>assert x &gt;= 0;</code>.</p>
+<p>Similarly, if the premise of the assertion is always false, then the implication
+is {term}<code>vacuously &lt;vacuous&gt;</code> true.  For example:</p>
+<p><code>cvl
+uint x;
+assert (x &lt; 0) =&gt; (x &gt;= 5);
+</code></p>
+<p>This assertion will pass, but only because the unsigned integer <code>x</code> is never
+negative.  This may mislead the user into thinking that they have checked that
+<code>x &gt;= 5</code> in some interesting situation, when in fact they have not.  The simpler
+assertion <code>assert x &gt;= 0;</code> more clearly describes what is going on.</p>
+<p>Overly complex assertions like this may indicate a mistake in the rule.  In this
+case, for example, the fact that the user was checking that <code>x &gt;= 0</code> may
+indicate that they should have declared <code>x</code> as an <code>int</code> instead of a <code>uint</code>.</p>
+<p>The assertion structure check tries to prove some complex logical statements by
+breaking them into simpler parts.  The following situations are reported by the
+assertion structure check:</p>
+<ul>
+<li><p><code>assert p =&gt; q;</code> is reported as a sanity violation if <code>p</code> is false whenever the
+assertion is reached (in which case the simpler assertion <code>assert !p;</code> more
+clearly describes the situation), or if <code>q</code> is always true (in which case
+<code>assert q;</code> is a clearer alternative).</p></li>
+<li><p><code>assert p &lt;=&gt; q;</code> is reported as a sanity violation if either <code>p</code> and <code>q</code> are
+both true whenever the assertion is reached (in which case the simpler
+assertions <code>assert p; assert q;</code> more clearly describe the situation), or if
+neither <code>p</code> nor <code>q</code> are ever true (in which case <code>assert !p; assert !q;</code> is a
+clearer alternative).</p></li>
+<li><p><code>assert p || q;</code> is reported as a sanity violation if either <code>p</code> is true
+whenever the assertion is reached
+(in which case <code>assert p;</code> more clearly describes the situation) or if <code>q</code> is
+always true (in which case <code>assert q;</code> is a clearer alternative).</p></li>
+</ul>
+<p>(sanity-redundant-require)=</p>
+<h2>Redundant require checks</h2>
+<p>The <strong>require redundancy</strong> sanity check highlights redundant <code>require</code> statements.
+A <code>require</code> is considered to be redundant if it does not rule out any {term}<code>models &lt;model&gt;</code>
+that haven't been ruled out by previous requires.</p>
+<p>For example, the require-redundancy check would flag the following rule:
+<code>cvl
+rule require_redundant {
+  uint x;
+  require x &gt; 3;
+  require x &gt; 2;
+  assert f(x) == 2, "f must return 2";
+}
+</code></p>
+<p>In this example, the second requirement is redundant, since any <code>x</code> greater
+than 3 will also be greater than 2.</p>
+<html><head><meta content="https://github.com/Certora/Documentation/prover/checking/sanity.md" name="source"/><meta content="https://github.com/Certora/Documentation/prover/checking/sanity.md" name="url"/><meta content="No Title Found" name="title"/><meta content="Rule Sanity Checks
+The {ref}--rule_sanity option enables some automatic checks that can warn users
+about certain classes of mistakes in specifications.
+There are several kinds of sanity checks:
+
+{ref}" name="text"/></head><body><div style="background-color: #f0f0f0; padding: 10px; margin-bottom: 20px;">Source: https://github.com/Certora/Documentation/prover/checking/sanity.md</div><h1>Rule Sanity Checks</h1>
+<p>The {ref}<code>--rule_sanity</code> option enables some automatic checks that can warn users
+about certain classes of mistakes in specifications.</p>
+<p>There are several kinds of sanity checks:</p>
+<ul>
+<li>{ref}<code>sanity-vacuity</code> determine whether rules pass {term}<code>vacuously &lt;vacuous&gt;</code> because they rule out all {term}<code>models &lt;model&gt;</code>.</li>
+<li>{ref}<code>sanity-assert-tautology</code> determine whether individual <code>assert</code> statements are {term}<code>tautologies &lt;tautology&gt;</code>.</li>
+<li>{ref}<code>sanity-trivial-invariant</code> detect invariants that hold in all states, rather than just reachable states.</li>
+<li>{ref}<code>sanity-assert-structure</code> detect unnecessarily complex <code>assert</code> statements.</li>
+<li>{ref}<code>sanity-redundant-require</code> detect unnecessary <code>require</code> statements.</li>
+</ul>
+<p>The <code>--rule_sanity</code> option may be followed by one of <code>none</code>, <code>basic</code>, or
+<code>advanced</code> options to control which sanity checks should be executed:
+ * With <code>--rule_sanity none</code> or without passing <code>--rule_sanity</code>, no sanity
+   checks are performed.
+ * With <code>--rule_sanity basic</code> or just <code>--rule_sanity</code> without a mode, the
+   vacuity check and the trivial invariant check are performed.
+ * With <code>--rule_sanity advanced</code>, all the sanity checks will be performed for
+   all invariants and rules.</p>
+<p>We recommend starting with the <code>basic</code> mode, since not all rules flagged by the
+<code>advanced</code> mode are incorrect.</p>
+<p>When the Prover is run with any of these options, it first checks that the rule
+passes; if it does pass then the sanity checks are performed.  If the sanity
+checks also pass, the rule is marked as verified with a green checkmark; if the
+sanity check fails, the rule is marked with a yellow symbol:</p>
+<p><img alt="Screenshot of rule report showing a passing rule, a failing rule, and a sanity failure" src="sanity-icons.png"/></p>
+<p>If a sanity check fails, you can expand the problems view to see the details
+of the failure:</p>
+<p><img alt="Screenshot of rule report showing the expanded details of a sanity failure" src="sanity-details.png"/></p>
+<p>The remainder of this document describes these checks in detail.</p>
+<p>(sanity-vacuity)=</p>
+<h2>Vacuity checks</h2>
+<p>The <strong>vacuity</strong> sanity check ensures that even when ignoring all the
+user-provided assertions, the end of the rule is reachable. This check ensures
+that that the combination of <code>require</code> statements does not rule out all
+possible counterexamples.  Rules that rule out all possible counterexamples
+are called {term}<code>vacuous</code> rules.  Since they don't actually check any
+assertions, they are almost certainly incorrect.</p>
+<p>For example, the following rule would be flagged by the vacuity check:
+<code>cvl
+rule vacuous {
+    uint x;
+    require x &gt; 2;
+    require x &lt; 1;
+    assert f(x) == 2, "f must return 2";
+}
+</code></p>
+<p>Since there are no models satisfying both <code>x &gt; 2</code> and <code>x &lt; 1</code>, this rule
+will always pass, regardless of the behavior of the contract.  This is an
+example of a {term}<code>vacuous</code> rule — one that passes only because the
+preconditions are contradictory.</p>
+<p>The vacuity check also flags situations where counterexamples are ruled
+out for reasons other than <code>require</code> statements.  A common example comes from
+reusing <code>env</code> variables.  Consider the following poorly-written rule:</p>
+<p>```cvl
+env e; uint amount; address recipient;</p>
+<p>require balanceOf(recipient) == 0;
+require amount &gt; 0;</p>
+<p>deposit(e, amount);
+transfer(e, recipient, amount);</p>
+<p>assert balanceOf(recipient) &gt; 0,
+    "depositing and then transferring makes recipient's balance positive";
+```</p>
+<p>Although it looks like this rule is reasonable, it may actually be vacuous.
+The problem is that the environment <code>e</code> is reused, and in particular
+<code>e.msg.value</code> is the same in the calls to <code>deposit</code> and <code>transfer</code>.  Since
+<code>transfer</code> is not payable, it will always revert if <code>e.msg.value != 0</code>.  On the
+other hand, <code>deposit</code> always reverts when <code>e.msg.value == 0</code>.  Therefore every
+example will either cause <code>deposit</code> or <code>transfer</code> to revert, so there are no
+models that reach the <code>assert</code> statement.</p>
+<p>(sanity-assert-tautology)=</p>
+<h2>Assert tautology checks</h2>
+<p>The <strong>assert tautology</strong> sanity check ensures that individual <code>assert</code> statements
+are not {term}<code>tautologies &lt;tautology&gt;</code>.  A tautology is a statement that is
+true on all examples, even if all the <code>require</code> and <code>if</code> conditions are
+removed. Tautology checks also consider the bodies of the contract functions. For
+example, <code>assert square(x) &gt;= 0;</code> is a tautology if <code>square</code> is a contract
+function that squares its input.</p>
+<p>For example, the following rule would be flagged by the assert tautology check:</p>
+<p><code>cvl
+rule tautology {
+  uint x; uint y;
+  require x != y;
+  ...
+  assert x &lt; 2 || x &gt;= 2,
+   "x must be smaller than 2 or greater than or equal to 2";
+}
+</code></p>
+<p>Since every <code>uint</code> satisfies the assertion, the assertion is tautological, which
+may indicate an error in the specification.</p>
+<p>(sanity-trivial-invariant)=</p>
+<h2>Trivial invariant checks</h2>
+<p>The <strong>Trivial invariant</strong> sanity check ensures that invariants are not trivial.
+A trivial invariant is one that holds in all possible states, not just in
+reachable states.</p>
+<p>For example, the following invariant is trivial:</p>
+<p><code>cvl
+invariant squaresNonNeg(int x)
+    x * x &gt;= 0
+</code></p>
+<p>While it does hold in every reachable state, it also holds in every
+non-reachable state.  Therefore it could be more efficiently checked as a rule:</p>
+<p><code>cvl
+rule squaresNonNeg(int x) {
+    assert x * x &gt;= 0;
+}
+</code></p>
+<p>The rule version is more efficient because it can do a single check in an
+arbitrary state rather than separately checking states after arbitrary method
+invocations.</p>
+<p>(sanity-assert-structure)=</p>
+<h2>Assertion structure checks</h2>
+<p>The <strong>assertion structure</strong> sanity check ensures that complex assert statements
+can't be replaced with simpler ones.</p>
+<p>If an assertion expression is more complex than necessary, it can pass for
+misleading reasons.  For example, consider the following assertion:</p>
+<p><code>cvl
+uint x;
+assert (x &lt; 5) =&gt; (x &gt;= 0);
+</code></p>
+<p>In this case, the assertion is true, but only because <code>x</code> is a <code>uint</code> and is
+therefore <em>always</em> non-negative.  The fact that <code>x &gt;= 0</code> has nothing to do with
+the fact that <code>x &lt; 5</code>.  Therefore this complex assertion could be replaced with
+the more informative assertion <code>assert x &gt;= 0;</code>.</p>
+<p>Similarly, if the premise of the assertion is always false, then the implication
+is {term}<code>vacuously &lt;vacuous&gt;</code> true.  For example:</p>
+<p><code>cvl
+uint x;
+assert (x &lt; 0) =&gt; (x &gt;= 5);
+</code></p>
+<p>This assertion will pass, but only because the unsigned integer <code>x</code> is never
+negative.  This may mislead the user into thinking that they have checked that
+<code>x &gt;= 5</code> in some interesting situation, when in fact they have not.  The simpler
+assertion <code>assert x &gt;= 0;</code> more clearly describes what is going on.</p>
+<p>Overly complex assertions like this may indicate a mistake in the rule.  In this
+case, for example, the fact that the user was checking that <code>x &gt;= 0</code> may
+indicate that they should have declared <code>x</code> as an <code>int</code> instead of a <code>uint</code>.</p>
+<p>The assertion structure check tries to prove some complex logical statements by
+breaking them into simpler parts.  The following situations are reported by the
+assertion structure check:</p>
+<ul>
+<li><p><code>assert p =&gt; q;</code> is reported as a sanity violation if <code>p</code> is false whenever the
+assertion is reached (in which case the simpler assertion <code>assert !p;</code> more
+clearly describes the situation), or if <code>q</code> is always true (in which case
+<code>assert q;</code> is a clearer alternative).</p></li>
+<li><p><code>assert p &lt;=&gt; q;</code> is reported as a sanity violation if either <code>p</code> and <code>q</code> are
+both true whenever the assertion is reached (in which case the simpler
+assertions <code>assert p; assert q;</code> more clearly describe the situation), or if
+neither <code>p</code> nor <code>q</code> are ever true (in which case <code>assert !p; assert !q;</code> is a
+clearer alternative).</p></li>
+<li><p><code>assert p || q;</code> is reported as a sanity violation if either <code>p</code> is true
+whenever the assertion is reached
+(in which case <code>assert p;</code> more clearly describes the situation) or if <code>q</code> is
+always true (in which case <code>assert q;</code> is a clearer alternative).</p></li>
+</ul>
+<p>(sanity-redundant-require)=</p>
+<h2>Redundant require checks</h2>
+<p>The <strong>require redundancy</strong> sanity check highlights redundant <code>require</code> statements.
+A <code>require</code> is considered to be redundant if it does not rule out any {term}<code>models &lt;model&gt;</code>
+that haven't been ruled out by previous requires.</p>
+<p>For example, the require-redundancy check would flag the following rule:
+<code>cvl
+rule require_redundant {
+  uint x;
+  require x &gt; 3;
+  require x &gt; 2;
+  assert f(x) == 2, "f must return 2";
+}
+</code></p>
+<p>In this example, the second requirement is redundant, since any <code>x</code> greater
+than 3 will also be greater than 2.</p>
+</body></html>

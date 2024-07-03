@@ -1,0 +1,279 @@
+<h1>A Simple Map</h1>
+<h2>The code</h2>
+<p>The below code contains the implementation of a simple map data structure, holding <code>uint</code> keys, <code>uint</code> values, and assuming that the value <code>0</code> indicates a non-existent key. It is possible to get, insert, or remove a key from the map.</p>
+<p>```solidity
+pragma solidity ^0.7.0;</p>
+<p>contract SimpleMap {
+    mapping(uint =&gt; uint) internal map;
+    function get(uint key) public view returns(uint) { return map[key]; }</p>
+<pre><code>function insert(uint key, uint value) external {
+    require(value != uint(0), "0 is not a valid value");
+    require (!contains(key), "key already exists");
+    map[key] = value;
+}
+
+function remove(uint key) external {
+    require (map[key] != uint(0), "Key does not exist");
+    map[key] = uint(0);
+}
+
+function contains(uint key) public view returns (bool) {
+    if (map[key] == uint(0)) {
+        return false;
+    }
+
+    return true;
+}
+</code></pre>
+<p>}
+```</p>
+<p>In the next sections of the tutorial, we will generalize this trivial contract to support enumeration of the keys in the map.</p>
+<h2>Writing specs</h2>
+<p>Writing rules requires us to consider what are the high-level properties our contract should satisfy. We show some simple and useful patterns for rules.</p>
+<h3>Generalized unit tests</h3>
+<p>Rules that generalize unit tests focus on a single state-mutating function of the contract and ensure that the state is mutated as expected. The main benefits of these rules are that they are easy to develop due to their similarity to unit tests. The added advantage compared to unit tests is that they only use symbolic values, meaning that we check not a single set of concrete values in the unit test but <em>all</em> possible values.</p>
+<p>Here is a simple rule for the <code>insert</code> function:</p>
+<p><code>cvl
+rule checkInsert(uint key, uint value) {
+    env e;
+    insert(e, key, value);
+    assert get(key) == value, "value of key is not equal to the inserted value";
+    assert contains(key), "key is not contained after successful insertion";
+}
+</code></p>
+<p>This rule checks that once a key is successfully inserted with <code>insert</code>, getting the key with <code>get</code> returns the value inserted. The <code>key</code> and <code>value</code> parameters declared in the rule's header are completely arbitrarily chosen. The <code>env</code> (environment) variable <code>e</code> is capturing the (symbolic) values of the blockchain variables, such as <code>msg.sender</code> and <code>block.number</code>. The invocation of insert expects to get as a first argument the environment variable, followed by the arguments according to the function's declaration.</p>
+<p><code>{note}
+Note that by default, the invocation of a function is assumed to succeed. That is, reverting paths of the function are ignored.
+</code></p>
+<p>After calling <code>insert</code>, we wish to examine if the mutated state is as expected. Therefore, we assert that calling <code>get(key)</code> is returning the value <code>value</code> inserted. It is possible to add an explanation string to the assertion, which may help in finding out which assertion was violated if a rule contains more than one assertion.</p>
+<p>We are now ready to run the tool: suppose the contract is saved in a file called <code>SimpleMap.sol</code>, and the spec is saved in a file <code>simpleMap.spec</code>, we can run the tool as follows:</p>
+<p><code>bash
+certoraRun SimpleMap.sol --verify SimpleMap:simpleMap.spec
+</code></p>
+<p>Which tells the tool to include the <code>SimpleMap</code> contract in its verification context, and to verify it using the provided spec file.</p>
+<p>Unfortunately, the tool outputs the following error:</p>
+<p><code>
+[main] ERROR log.Logger - Syntax error in spec file (9:5): could not type expression "get(key)", message: Could not find an overloading of method get that matches the given arguments: uint. Method is not envfree; did you forget to provide the environment as the first function argument?
+</code></p>
+<p>The cause of the failure is that we did not pass an environment variable to the invocation of <code>get</code>. While it is possible to reuse <code>e</code> or even declare another environment variable, we note that <code>get</code> does not depend on any of the blockchain-related variables. Thus, we can tell the Prover to relieve us from specifying the environment by adding the following declaration to the top of the spec file:</p>
+<p><code>cvl
+methods {
+    get(uint) returns uint envfree
+}
+</code></p>
+<p>Add an <code>envfree</code> declaration for the method <code>contains</code> too.</p>
+<h3>Revert conditions</h3>
+<p>As noted before, by default, invocations are assuming only the non-reverting paths of the function. It is useful to precisely characterize all conditions that guarantee that the function would not revert. We can write such a rule for <code>insert</code>:</p>
+<p>```cvl
+rule insertRevertConditions(uint key, uint value) {
+    env e;
+    insert@withrevert(e, key, value);
+    bool succeeded = !lastReverted;</p>
+<pre><code>assert value != 0  =&gt; succeeded;
+</code></pre>
+<p>}
+```</p>
+<p>Here, we invoke <code>insert</code> but append to the function name the modifier <code>@withrevert</code> that tells the Prover to skip the pruning of reverting paths. (One could also stress that a function should prune the reverting paths using <code>@norevert</code>, although this is equivalent to not writing any modifier at all.) We then save into a boolean variable the negation of <code>lastReverted</code>, which is a special keyword set to <code>true</code> if the last invocation reverted. We then assert that if the value inserted is non-zero (recall that we consider 0 to be an illegal value in our map implementation), then the value of <code>succeeded</code> must be true.</p>
+<p><code>{note}
+`lastReverted` will _always_ be `false` following an invocation that is not permitting reverting paths.
+</code></p>
+<p>Running the Prover on the new rule, it returns a failure. The failure is happening because <code>value</code> is non-zero yet the <code>insert</code> function reverted anyway.</p>
+<p><img alt="call trace example" src="insert_revert.png"/></p>
+<p>A hint towards what happened can be found in the <code>Variables</code> section. The value of <code>e.msg.value</code> is indicating the <code>msg.value</code> used in <code>insert</code>. Since <code>insert</code> is not a payable function, it is expected to revert when <code>msg.value</code> is non-zero, which is indeed our case here.</p>
+<p>We refine the rule as follows, and require that <code>e.msg.value</code> is 0:</p>
+<p>```cvl
+rule insertRevertConditions(uint key, uint value) {
+    env e;
+    insert@withrevert(e, key, value);
+    bool succeeded = !lastReverted;</p>
+<pre><code>assert (e.msg.value == 0 
+    &amp;&amp; value != 0)
+    =&gt; succeeded;
+</code></pre>
+<p>}
+```</p>
+<p>We run the rule again, but it still fails:</p>
+<p><img alt="call trace example - second failure" src="iter_fail_2.png"/></p>
+<p>We get a call trace that tells us the most important operations performed by the bytecode of the contract, on which the Prover operates. The call trace tells us that we were reading from a storage slot the value 1. To assist us in identifying the issue, in parenthesis we get a reference to the matching source code, which is the load of <code>map[key]</code> in line 19, which is where the <code>contains</code> function is defined. We understand that we forgot to include the condition that the key does not already exist in the map. So we refine the code again:</p>
+<p>```cvl
+rule insertRevertConditions(uint key, uint value) {
+    env e;
+    bool containsKey = contains(key);
+    insert@withrevert(e, key, value);
+    bool succeeded = !lastReverted;</p>
+<pre><code>assert (e.msg.value == 0 
+    &amp;&amp; value != 0
+    &amp;&amp; !containsKey)
+    =&gt; succeeded;
+</code></pre>
+<p>}
+```</p>
+<p>And finally our rule is successfully verified.</p>
+<h3>Inverses</h3>
+<p>In some cases, we can reach wider coverage if we write rules that check the interaction of multiple functions with each other. In the map implementation, it is natural to check that insert and remove are inverses of one another. Specifically, we'd like to check that:</p>
+<ul>
+<li><p>Invoking <code>remove</code> after a successful <code>insert</code> must succeed too.</p></li>
+<li><p>The value of a key that was inserted and immediately removed is not the value that we inserted.</p></li>
+</ul>
+<p>The below rule shows how we can check these two assertions:</p>
+<p><code>cvl
+rule inverses(uint key, uint value) {
+    env e;
+    insert(e, key, value);
+    env e2;
+    require e2.msg.value == 0;
+    remove@withrevert(e2, key);
+    bool removeSucceeded = !lastReverted;
+    assert removeSucceeded, "remove after insert must succeed";
+    assert get(key) != value, "value of removed key must not be the inserted value";
+}
+</code></p>
+<p>Note that we use two separate environments for <code>insert</code> and <code>remove</code> for better coverage.</p>
+<p><code>{note}
+Reuse of environment variables could lead to vacuity, which is expanded upon in other sections of this manual.
+</code></p>
+<p><code>{note}
+It is recommended to keep `lastReverted` in separate variables to clearly indicate which invocation we refer to, and to avoid confusion if invocations are reordered.
+</code></p>
+<p>This rule is verified by the Prover.</p>
+<html><head><meta content="https://github.com/Certora/Documentation/confluence/map/simple.md" name="source"/><meta content="https://github.com/Certora/Documentation/confluence/map/simple.md" name="url"/><meta content="The code" name="title"/><meta content="A Simple Map
+The code
+The below code contains the implementation of a simple map data structure, holding uint keys, uint values, and assuming that the value 0 indicates a non-existent key. It is possi" name="text"/></head><body><div style="background-color: #f0f0f0; padding: 10px; margin-bottom: 20px;">Source: https://github.com/Certora/Documentation/confluence/map/simple.md</div><h1>A Simple Map</h1>
+<h2>The code</h2>
+<p>The below code contains the implementation of a simple map data structure, holding <code>uint</code> keys, <code>uint</code> values, and assuming that the value <code>0</code> indicates a non-existent key. It is possible to get, insert, or remove a key from the map.</p>
+<p>```solidity
+pragma solidity ^0.7.0;</p>
+<p>contract SimpleMap {
+    mapping(uint =&gt; uint) internal map;
+    function get(uint key) public view returns(uint) { return map[key]; }</p>
+<pre><code>function insert(uint key, uint value) external {
+    require(value != uint(0), "0 is not a valid value");
+    require (!contains(key), "key already exists");
+    map[key] = value;
+}
+
+function remove(uint key) external {
+    require (map[key] != uint(0), "Key does not exist");
+    map[key] = uint(0);
+}
+
+function contains(uint key) public view returns (bool) {
+    if (map[key] == uint(0)) {
+        return false;
+    }
+
+    return true;
+}
+</code></pre>
+<p>}
+```</p>
+<p>In the next sections of the tutorial, we will generalize this trivial contract to support enumeration of the keys in the map.</p>
+<h2>Writing specs</h2>
+<p>Writing rules requires us to consider what are the high-level properties our contract should satisfy. We show some simple and useful patterns for rules.</p>
+<h3>Generalized unit tests</h3>
+<p>Rules that generalize unit tests focus on a single state-mutating function of the contract and ensure that the state is mutated as expected. The main benefits of these rules are that they are easy to develop due to their similarity to unit tests. The added advantage compared to unit tests is that they only use symbolic values, meaning that we check not a single set of concrete values in the unit test but <em>all</em> possible values.</p>
+<p>Here is a simple rule for the <code>insert</code> function:</p>
+<p><code>cvl
+rule checkInsert(uint key, uint value) {
+    env e;
+    insert(e, key, value);
+    assert get(key) == value, "value of key is not equal to the inserted value";
+    assert contains(key), "key is not contained after successful insertion";
+}
+</code></p>
+<p>This rule checks that once a key is successfully inserted with <code>insert</code>, getting the key with <code>get</code> returns the value inserted. The <code>key</code> and <code>value</code> parameters declared in the rule's header are completely arbitrarily chosen. The <code>env</code> (environment) variable <code>e</code> is capturing the (symbolic) values of the blockchain variables, such as <code>msg.sender</code> and <code>block.number</code>. The invocation of insert expects to get as a first argument the environment variable, followed by the arguments according to the function's declaration.</p>
+<p><code>{note}
+Note that by default, the invocation of a function is assumed to succeed. That is, reverting paths of the function are ignored.
+</code></p>
+<p>After calling <code>insert</code>, we wish to examine if the mutated state is as expected. Therefore, we assert that calling <code>get(key)</code> is returning the value <code>value</code> inserted. It is possible to add an explanation string to the assertion, which may help in finding out which assertion was violated if a rule contains more than one assertion.</p>
+<p>We are now ready to run the tool: suppose the contract is saved in a file called <code>SimpleMap.sol</code>, and the spec is saved in a file <code>simpleMap.spec</code>, we can run the tool as follows:</p>
+<p><code>bash
+certoraRun SimpleMap.sol --verify SimpleMap:simpleMap.spec
+</code></p>
+<p>Which tells the tool to include the <code>SimpleMap</code> contract in its verification context, and to verify it using the provided spec file.</p>
+<p>Unfortunately, the tool outputs the following error:</p>
+<p><code>
+[main] ERROR log.Logger - Syntax error in spec file (9:5): could not type expression "get(key)", message: Could not find an overloading of method get that matches the given arguments: uint. Method is not envfree; did you forget to provide the environment as the first function argument?
+</code></p>
+<p>The cause of the failure is that we did not pass an environment variable to the invocation of <code>get</code>. While it is possible to reuse <code>e</code> or even declare another environment variable, we note that <code>get</code> does not depend on any of the blockchain-related variables. Thus, we can tell the Prover to relieve us from specifying the environment by adding the following declaration to the top of the spec file:</p>
+<p><code>cvl
+methods {
+    get(uint) returns uint envfree
+}
+</code></p>
+<p>Add an <code>envfree</code> declaration for the method <code>contains</code> too.</p>
+<h3>Revert conditions</h3>
+<p>As noted before, by default, invocations are assuming only the non-reverting paths of the function. It is useful to precisely characterize all conditions that guarantee that the function would not revert. We can write such a rule for <code>insert</code>:</p>
+<p>```cvl
+rule insertRevertConditions(uint key, uint value) {
+    env e;
+    insert@withrevert(e, key, value);
+    bool succeeded = !lastReverted;</p>
+<pre><code>assert value != 0  =&gt; succeeded;
+</code></pre>
+<p>}
+```</p>
+<p>Here, we invoke <code>insert</code> but append to the function name the modifier <code>@withrevert</code> that tells the Prover to skip the pruning of reverting paths. (One could also stress that a function should prune the reverting paths using <code>@norevert</code>, although this is equivalent to not writing any modifier at all.) We then save into a boolean variable the negation of <code>lastReverted</code>, which is a special keyword set to <code>true</code> if the last invocation reverted. We then assert that if the value inserted is non-zero (recall that we consider 0 to be an illegal value in our map implementation), then the value of <code>succeeded</code> must be true.</p>
+<p><code>{note}
+`lastReverted` will _always_ be `false` following an invocation that is not permitting reverting paths.
+</code></p>
+<p>Running the Prover on the new rule, it returns a failure. The failure is happening because <code>value</code> is non-zero yet the <code>insert</code> function reverted anyway.</p>
+<p><img alt="call trace example" src="insert_revert.png"/></p>
+<p>A hint towards what happened can be found in the <code>Variables</code> section. The value of <code>e.msg.value</code> is indicating the <code>msg.value</code> used in <code>insert</code>. Since <code>insert</code> is not a payable function, it is expected to revert when <code>msg.value</code> is non-zero, which is indeed our case here.</p>
+<p>We refine the rule as follows, and require that <code>e.msg.value</code> is 0:</p>
+<p>```cvl
+rule insertRevertConditions(uint key, uint value) {
+    env e;
+    insert@withrevert(e, key, value);
+    bool succeeded = !lastReverted;</p>
+<pre><code>assert (e.msg.value == 0 
+    &amp;&amp; value != 0)
+    =&gt; succeeded;
+</code></pre>
+<p>}
+```</p>
+<p>We run the rule again, but it still fails:</p>
+<p><img alt="call trace example - second failure" src="iter_fail_2.png"/></p>
+<p>We get a call trace that tells us the most important operations performed by the bytecode of the contract, on which the Prover operates. The call trace tells us that we were reading from a storage slot the value 1. To assist us in identifying the issue, in parenthesis we get a reference to the matching source code, which is the load of <code>map[key]</code> in line 19, which is where the <code>contains</code> function is defined. We understand that we forgot to include the condition that the key does not already exist in the map. So we refine the code again:</p>
+<p>```cvl
+rule insertRevertConditions(uint key, uint value) {
+    env e;
+    bool containsKey = contains(key);
+    insert@withrevert(e, key, value);
+    bool succeeded = !lastReverted;</p>
+<pre><code>assert (e.msg.value == 0 
+    &amp;&amp; value != 0
+    &amp;&amp; !containsKey)
+    =&gt; succeeded;
+</code></pre>
+<p>}
+```</p>
+<p>And finally our rule is successfully verified.</p>
+<h3>Inverses</h3>
+<p>In some cases, we can reach wider coverage if we write rules that check the interaction of multiple functions with each other. In the map implementation, it is natural to check that insert and remove are inverses of one another. Specifically, we'd like to check that:</p>
+<ul>
+<li><p>Invoking <code>remove</code> after a successful <code>insert</code> must succeed too.</p></li>
+<li><p>The value of a key that was inserted and immediately removed is not the value that we inserted.</p></li>
+</ul>
+<p>The below rule shows how we can check these two assertions:</p>
+<p><code>cvl
+rule inverses(uint key, uint value) {
+    env e;
+    insert(e, key, value);
+    env e2;
+    require e2.msg.value == 0;
+    remove@withrevert(e2, key);
+    bool removeSucceeded = !lastReverted;
+    assert removeSucceeded, "remove after insert must succeed";
+    assert get(key) != value, "value of removed key must not be the inserted value";
+}
+</code></p>
+<p>Note that we use two separate environments for <code>insert</code> and <code>remove</code> for better coverage.</p>
+<p><code>{note}
+Reuse of environment variables could lead to vacuity, which is expanded upon in other sections of this manual.
+</code></p>
+<p><code>{note}
+It is recommended to keep `lastReverted` in separate variables to clearly indicate which invocation we refer to, and to avoid confusion if invocations are reordered.
+</code></p>
+<p>This rule is verified by the Prover.</p>
+</body></html>

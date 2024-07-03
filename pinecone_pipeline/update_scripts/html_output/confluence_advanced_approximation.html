@@ -1,0 +1,61 @@
+<h1>Approximation</h1>
+<h2>The Problem</h2>
+<p>Many potential questions we may like to ask about programs in any language are inherently undecidable. For example, in general, it is impossible to know whether or not a program will halt (known as the "Halting Problem"). In the case of the Certora Prover, questions about nonlinear arithmetic tend to be very difficult to answer (nonlinear arithmetic is undecidable in general).
+Ultimately this means that the Prover will spend forever trying to get an answer and will eventually time out.</p>
+<h2>Solution 1: Overapproximation</h2>
+<p>In essence, overapproximation means that we consider <em>more</em> possible program states than are actually possible. Because this includes <em>all original behavior</em>, this approach is <strong>sound</strong>. That is to say, we will never falsely prove something correct when it is not. However, because we consider extra program behavior, there is a chance that we will find a bug in this extra program behavior that does not exist in the actual program.</p>
+<p>Imagine we have the following logic expression snippet:</p>
+<p><code>
+uint256 x;
+uint256 y;
+assume y &gt; 1;
+assume x &gt; 1;
+z := mul(x, y);
+assert z &gt; x &amp;&amp; z &gt; y;
+</code></p>
+<p>We have to choose how we want the solver to model <code>mul</code>. The natural choice is to model it with ordinary integer arithmetic multiplication (i.e., <code>mul</code> will behave exactly as you expect). This choice means that the underlying solver will have to work within the restrictions of integer arithmetic multiplication to try to find a counterexample. Ultimately the solver would prove this program correct.</p>
+<h3>Uninterpreted Function as an Overapproximation</h3>
+<p>But suppose the solver timed out on this example. We might make a different choice in how we model <code>mul</code> using an uninterpreted function (see {ref}<code>this section &lt;uninterp-functions&gt;</code> for a brief description of uninterpreted functions). In essence, any time the solver sees an uninterpreted function, it knows "any time this function receives the same values as arguments, it will produce the same output." Other than that, the solver has free reign to decide which outputs each input will produce. For example it could decide that <code>uninterp_mul(1, 5) -&gt; 22</code>. Or it could decide <code>uninterp_mul(1, 5) -&gt; 5</code>. Conversely, in if we had modeled multiplication as above, the solver would be forced to decide <code>integer_arithmetic_mul(1, 5) -&gt; 5</code>. </p>
+<p>Notice that the solver could choose many behaviors for <code>uninterp_mul</code>, but <em>importantly</em> these behaviors <em>include</em><code>integer_arithmetic_mul</code>. This is what makes this an overapproximation--it considers program behavior that includes "actual" program behavior and more.</p>
+<p>So what would the solver decide in this case? It would no longer prove the program correct and would give us a (seemingly nonsensical) counterexample, for example:</p>
+<p><code>
+x = 5;
+y = 10;
+z = 5;
+mul = lambda(a, b) if (a == 5) 5 else 299
+</code></p>
+<p>In this case we have a <em>spurious counterexample</em> caused by our overapproximation.</p>
+<h3>Axiomatized Uninterpreted Function as an Overapproximation</h3>
+<p>There is a middle ground that we can take between precisely modeling program behavior and the above overapproximation. We can use uninterpreted functions and add axioms to them. In the above example, we let the solver decide everything about <code>uninterp_mul</code>. But it turns out we can give hints to the solver, to more closely approximate the behavior of <code>integer_arithmetic_mul</code></p>
+<html><head><meta content="https://github.com/Certora/Documentation/confluence/advanced/approximation.md" name="source"/><meta content="https://github.com/Certora/Documentation/confluence/advanced/approximation.md" name="url"/><meta content="Uninterpreted Function as an Overapproximation" name="title"/><meta content="Approximation
+The Problem
+Many potential questions we may like to ask about programs in any language are inherently undecidable. For example, in general, it is impossible to know whether or not a prog" name="text"/></head><body><div style="background-color: #f0f0f0; padding: 10px; margin-bottom: 20px;">Source: https://github.com/Certora/Documentation/confluence/advanced/approximation.md</div><h1>Approximation</h1>
+<h2>The Problem</h2>
+<p>Many potential questions we may like to ask about programs in any language are inherently undecidable. For example, in general, it is impossible to know whether or not a program will halt (known as the "Halting Problem"). In the case of the Certora Prover, questions about nonlinear arithmetic tend to be very difficult to answer (nonlinear arithmetic is undecidable in general).
+Ultimately this means that the Prover will spend forever trying to get an answer and will eventually time out.</p>
+<h2>Solution 1: Overapproximation</h2>
+<p>In essence, overapproximation means that we consider <em>more</em> possible program states than are actually possible. Because this includes <em>all original behavior</em>, this approach is <strong>sound</strong>. That is to say, we will never falsely prove something correct when it is not. However, because we consider extra program behavior, there is a chance that we will find a bug in this extra program behavior that does not exist in the actual program.</p>
+<p>Imagine we have the following logic expression snippet:</p>
+<p><code>
+uint256 x;
+uint256 y;
+assume y &gt; 1;
+assume x &gt; 1;
+z := mul(x, y);
+assert z &gt; x &amp;&amp; z &gt; y;
+</code></p>
+<p>We have to choose how we want the solver to model <code>mul</code>. The natural choice is to model it with ordinary integer arithmetic multiplication (i.e., <code>mul</code> will behave exactly as you expect). This choice means that the underlying solver will have to work within the restrictions of integer arithmetic multiplication to try to find a counterexample. Ultimately the solver would prove this program correct.</p>
+<h3>Uninterpreted Function as an Overapproximation</h3>
+<p>But suppose the solver timed out on this example. We might make a different choice in how we model <code>mul</code> using an uninterpreted function (see {ref}<code>this section &lt;uninterp-functions&gt;</code> for a brief description of uninterpreted functions). In essence, any time the solver sees an uninterpreted function, it knows "any time this function receives the same values as arguments, it will produce the same output." Other than that, the solver has free reign to decide which outputs each input will produce. For example it could decide that <code>uninterp_mul(1, 5) -&gt; 22</code>. Or it could decide <code>uninterp_mul(1, 5) -&gt; 5</code>. Conversely, in if we had modeled multiplication as above, the solver would be forced to decide <code>integer_arithmetic_mul(1, 5) -&gt; 5</code>. </p>
+<p>Notice that the solver could choose many behaviors for <code>uninterp_mul</code>, but <em>importantly</em> these behaviors <em>include</em><code>integer_arithmetic_mul</code>. This is what makes this an overapproximation--it considers program behavior that includes "actual" program behavior and more.</p>
+<p>So what would the solver decide in this case? It would no longer prove the program correct and would give us a (seemingly nonsensical) counterexample, for example:</p>
+<p><code>
+x = 5;
+y = 10;
+z = 5;
+mul = lambda(a, b) if (a == 5) 5 else 299
+</code></p>
+<p>In this case we have a <em>spurious counterexample</em> caused by our overapproximation.</p>
+<h3>Axiomatized Uninterpreted Function as an Overapproximation</h3>
+<p>There is a middle ground that we can take between precisely modeling program behavior and the above overapproximation. We can use uninterpreted functions and add axioms to them. In the above example, we let the solver decide everything about <code>uninterp_mul</code>. But it turns out we can give hints to the solver, to more closely approximate the behavior of <code>integer_arithmetic_mul</code></p>
+</body></html>

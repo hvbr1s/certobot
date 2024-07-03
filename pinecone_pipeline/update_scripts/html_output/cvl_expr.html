@@ -1,0 +1,1113 @@
+<h1>Expressions</h1>
+<p>A CVL expression is anything that represents a value.  This page documents all
+possible expressions in CVL and explains how they are evaluated.</p>
+<p><code>{contents}
+</code></p>
+<h2>Syntax</h2>
+<p>The syntax for CVL expressions is given by the following <a href="ebnf-syntax">EBNF grammar</a>:</p>
+<p>```
+expr ::= literal
+       | unop expr
+       | expr binop expr
+       | "(" exprs ")"
+       | expr "?" expr ":" expr
+       | [ "forall" | "exists" ] type id "." expr</p>
+<pre><code>   | expr "." id
+   | id [ "[" expr "]" { "[" expr "]" } ]
+   | id "(" types ")"
+
+   | function_call
+
+   | expr "in" id
+</code></pre>
+<p>function_call ::=
+       | [ id "." ] id
+         [ "@" ( "norevert" | "withrevert" | "dontsummarize" ) ]
+         "(" exprs ")"
+         [ "at" id ]</p>
+<p>literal ::= "true" | "false" | number | string</p>
+<p>unop  ::= "~" | "!" | "-"</p>
+<p>binop ::= "+" | "-" | "*" | "/" | "%" | "^"
+        | "&gt;" | "&lt;" | "==" | "!=" | "&gt;=" | "&lt;="
+        | "&amp;" | "|" | "&lt;&lt;" | "&gt;&gt;" | "&amp;&amp;" | "||"
+        | "=&gt;" | "&lt;=&gt;" | "xor" | "&gt;&gt;&gt;"</p>
+<p>specials_fields ::=
+           | "block" "." [ "number" | "timestamp" ]
+           | "msg"   "." [ "address" | "sender" | "value" ]
+           | "tx"    "." [ "origin" ]
+           | "length"
+           | "selector" | "isPure" | "isView" | "numberOfArguments" | "isFallback"</p>
+<p>special<em>vars ::=
+           | "lastReverted" | "lastHasThrown"
+           | "lastStorage"
+           | "allContracts"
+           | "lastMsgSig"
+           | "</em>"
+           | "max<em>uint" | "max</em>address" | "max<em>uint8" | ... | "max</em>uint256"
+           | "nativeBalances"
+           | "calledContract"
+           | "executingContract"</p>
+<p>cast<em>functions ::=
+    | require</em>functions | to<em>functions | assert</em>functions</p>
+<p>require<em>functions ::=
+    | "require</em>uint8" | ... | "require<em>uint256" | "require</em>int8" | ... | "require<em>int256" | "require</em>address"</p>
+<p>to<em>functions ::=
+    | "to</em>mathint" | "to<em>bytes1" | ... | "to</em>bytes32"</p>
+<p>assert<em>functions ::=
+   | "assert</em>uint8" | ... | "assert<em>uint256" | "assert</em>int8" | ... | "assert<em>int256" | "assert</em>address"</p>
+<p>contract ::= id | "currentContract"
+```</p>
+<p>See {doc}<code>basics</code> for the <code>id</code>, <code>number</code>, and <code>string</code> productions.
+See {doc}<code>types</code> for the <code>type</code> production.</p>
+<p>(math-ops)=</p>
+<h2>Basic operations</h2>
+<p>CVL provides the same basic arithmetic, comparison, bitwise, and logical
+operations for basic types that solidity does, with a few differences listed
+in this section and the next.  The <a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Operator_Precedence#table">precedence and associativity rules</a>
+are standard.</p>
+<p><code>{caution}
+One significant difference between CVL and Solidity is that in Solidity, `^`
+denotes bitwise exclusive or and `**` denotes exponentiation, whereas in CVL,
+`^` denotes exponentiation and `xor` denotes exclusive or.
+</code></p>
+<p>% TODO: migrate this information here.
+See {ref}<code>cvl2-integer-types</code> for more information about the interaction between
+mathematical types and the meaning of mathematical operations.</p>
+<p>(struct-comparison)=</p>
+<h2>Struct Comparison</h2>
+<p>CVL supports equality comparison of structs under the following restrictions:</p>
+<ul>
+<li>The structs must be of the same type.</li>
+<li>The structs (or any nested structs) don't contain dynamic types (dynamic arrays, string, bytes).</li>
+<li>There's no support for comparison for structs fetched using direct-storage-access.</li>
+</ul>
+<p>Two structs will be evaluated as equal if and only if all the fields are equal.</p>
+<p>For example:</p>
+<p><code>cvl
+rule example(MyContract.MyStruct s) {
+    env e;
+    assert s == currentContract.myStructGetter(e);
+}
+</code></p>
+<p>(logic-exprs)=</p>
+<h2>Extended logical operations</h2>
+<p>CVL also adds several useful logical operations:</p>
+<ul>
+<li><p>Like <code>&amp;&amp;</code> or <code>||</code>, an <em>implication</em> expression <code>expr1 =&gt; expr2</code> requires
+<code>expr1</code> and <code>expr2</code> to be boolean expressions and is itself a boolean
+expression.  <code>expr1 =&gt; expr2</code> evaluates to <code>false</code> if and only if <code>expr1</code>
+evaluates to <code>true</code> and <code>expr2</code> evaluates to <code>false</code>.  <code>expr1 =&gt; expr2</code> is
+equivalent to <code>!expr1 || expr2</code>.</p>
+<p>For example, the statement <code>assert initialized =&gt; x &gt; 0;</code> will only report
+counterexamples where <code>initialized</code> is true but <code>x</code> is not positive.</p></li>
+<li><p>The short-circuiting behavior of implications (<code>=&gt;</code>) and other boolean connectors in CVL mirrors the
+short-circuiting behavior seen in standard logical operators (<code>&amp;&amp;</code> and <code>||</code>). In practical
+terms, this implies that the evaluation process is terminated as soon as the final result
+can be determined without necessitating further computation.
+For example, when dealing with an implication expression like <code>expr1 =&gt; expr2</code>, if the
+evaluation of <code>expr1</code> results in false, there is no need to proceed with evaluating
+<code>expr2</code> since the overall result is already known. This aligns with the common
+short-circuiting behavior found in traditional logical operators.</p></li>
+<li><p>Similarly, an <em>if and only if</em> expression (also called a <em>bidirectional implication</em>)
+<code>expr1 &lt;=&gt; expr2</code> requires <code>expr1</code> and <code>expr2</code> to be boolean
+expressions and is itself a boolean expression.  <code>expr1 &lt;=&gt; expr2</code> evaluates
+to <code>true</code> if <code>expr1</code> and <code>expr2</code> evaluate to the same boolean value.</p>
+<p>For example, the statement <code>assert balanceA &gt; 0 &lt;=&gt; balanceB &gt; 0;</code> will
+report a violation if exactly one of <code>balanceA</code> and <code>balanceB</code> is positive.</p></li>
+<li><p>An <em>if-then-else</em> (<em>ITE</em>) expression of the form
+<code>cond ? expr1 : expr2</code> requires <code>cond</code> to be a boolean expression and
+requires <code>expr1</code> and <code>expr2</code> to have the same type; the entire
+if-then-else expression has the same type as <code>expr1</code> and <code>expr2</code>.  The
+expression <code>cond ? expr1 : expr2</code> should be read "if <code>cond</code> then <code>expr1</code>
+else <code>expr2</code>.  If <code>cond</code> evaluates to <code>true</code> then the entire
+expression evaluates to <code>expr1</code>; otherwise the entire expression evaluates
+to <code>expr2</code>.</p>
+<p>For example, the expression
+<code>cvl
+uint balance = address == owner ? ownerBalance()
+                                : userBalance(address);
+</code>
+will set <code>balance</code> to <code>ownerBalance()</code> if <code>address</code> is <code>owner</code>, and will set
+it to <code>userBalance(address)</code> otherwise.</p>
+<p>Conditional expressions are <em>short-circuiting</em>: if <code>expr1</code> or <code>expr2</code> have
+side-effects (such as updating a {ref}<code>ghost variable &lt;ghost-variables&gt;</code>), only the
+side-effects of the expression that is chosen are performed.</p>
+<p>Regarding the logical operator precedence, <code>=&gt;</code> has higher precedence than <code>&lt;=&gt;</code>,
+and unlike math operators both are <em>right</em> associative, so <code>expr1 =&gt; expr2 =&gt; expr3</code>
+is equivalent to <code>expr1 =&gt; (expr2 =&gt; expr3)</code>.</p></li>
+<li><p>A <em>universal</em> expression of the form <code>forall t v . expr</code> requires <code>t</code>
+to be a <a href="types">type</a> (such as <code>uint256</code> or <code>address</code>) and <code>v</code> to be
+a variable name; <code>expr</code> should be a boolean expression and may refer to
+the identifier <code>v</code>.  The expression evaluates to <code>true</code> if <em>every</em> possible
+value of the variable <code>v</code> causes <code>expr</code> to evaluate to <code>true</code>.</p>
+<p>For example, the statement
+<code>cvl
+require (forall address user . balance(user) &lt;= balance(biggestUser));
+</code>
+will ensure that every other user has a balance that is less than or equal
+to the balance of <code>biggestUser</code>.</p></li>
+<li><p>Like a universal expression, an <em>existential</em> expression of the form
+<code>exists t v . expr</code> requires <code>t</code> to be a <a href="types">type</a> and <code>v</code> to be a
+variable name; <code>expr</code> should be a boolean expression and may refer to the
+variable <code>v</code>.  The expression evaluates to <code>true</code> if there is <em>any</em> possible
+value of the variable <code>v</code> that causes <code>expr</code> to evaluate to <code>true</code>.</p>
+<p>For example, the statement
+<code>cvl
+require (exists uint t . priceAtTime(t) != 0);
+</code>
+will ensure that there is some time for which the price is nonzero.</p></li>
+</ul>
+<p><code>{note}
+The symbols `forall` and `exist` are sometimes referred to as {term}`quantifier`s,
+and expressions of the form `forall type v . e` and `exist type v . e` are
+referred to as {term}`quantified expression`s.
+</code></p>
+<p>```<code>{caution}
+</code>forall<code>and</code>exists` expressions are powerful and elegant ways to express rules
+and invariants, but they require the Prover to consider all possible values of
+a given type.  In some cases they can cause significant slowdowns for the
+Prover.</p>
+<p>If you have rules or invariants using <code>exists</code> that are running slowly or
+timing out, you can remove the <code>exists</code> by manually computing the value that
+exists.  For example, you might replace
+<code>cvl
+require (exists uint t . priceAtTime(t) != 0);
+</code>
+with
+<code>cvl
+require priceAtTime(startTime) != 0;
+</code></p>
+<p>````</p>
+<p><code>{caution}
+Calling contract functions within the body of a quantified expression is an
+experimental feature and may not work as intended.
+</code></p>
+<p><code>{note}
+The Prover uses approximations that may cause spurious counterexamples in rules
+that use quantifiers.  For example, a rule that requires a quantified statement
+may produce a counterexample that doesn't satisfy the requirement.  The
+approximation is {term}`sound`: it won't cause violations to be hidden.  See
+{ref}`grounding` for more detail.
+</code></p>
+<h2>Accessing fields and arrays</h2>
+<p>One can access the special fields of built-in types, fields of user-defined
+<code>struct</code> types, and members of user-defined <code>enum</code> types using the normal
+<code>expr.field</code> notation.  Note that as described in {ref}<code>user-types</code>,
+access to user-defined types must be qualified by a contract name.</p>
+<p>Access to arrays also uses the same syntax as Solidity.</p>
+<h2>Contracts, method signatures and their properties</h2>
+<p>Writing the ABI signature for a contract method produces a <code>method</code> object,
+which can be used to access the {ref}<code>method fields &lt;method-type&gt;</code>.</p>
+<p>For example,
+<code>cvl
+method m;
+require m.selector == sig:balanceOf(address).selector
+     || m.selector == sig:transfer(address, uint256).selector;
+</code>
+will constrain <code>m</code> to be either the <code>balanceOf</code> or the <code>transfer</code> method.</p>
+<p>One can determine whether a contract has a particular method using the <code>s in c</code>
+where <code>s</code> is a method selector and <code>c</code> is a contract (either <code>currentContract</code>
+or a contract introduced with a {ref}<code>using statement &lt;using-stmt&gt;</code>.  For
+example, the statement
+<code>cvl
+if (burnFrom(address,uint256).selector in currentContract) {
+  ...
+}
+</code>
+will check that the current contract supports the optional <code>burnFrom</code> method.</p>
+<p>(special-fields)=
+(currentContract)=</p>
+<h2>Special variables and fields</h2>
+<p>Several of the CVL types have special fields; see {doc}<code>types</code> (particularly
+{ref}<code>env</code>, {ref}<code>method-type</code>, and {ref}<code>arrays</code>).</p>
+<p>There are also several built-in variables:</p>
+<ul>
+<li><p><code>address currentContract</code> always refers to the main contract being verified
+(that is, the contract named in the {ref}<code>--verify</code> option).</p></li>
+<li><p><code>bool lastReverted</code> and <code>bool lastHasThrown</code> are boolean values that
+indicate whether the most recent contract function reverted or threw an
+exception.</p>
+<p>`<code>{caution}
+The variables `lastReverted` and `lastHasThrown` are updated after each
+contract call, even those called without `@withrevert` (see {ref}`call-expr`).
+This is a common source of errors.  For example, the following rule is
+vacuous:
+</code>cvl
+rule revert<em>if</em>paused() {
+  withdraw@withrevert();
+  assert isPaused() =&gt; lastReverted;
+}
+```</p>
+<p>In this rule, the call to <code>isPaused</code> will update <code>lastReverted</code> to <code>true</code>,
+overwriting the value set by <code>withdraw</code>.
+````</p></li>
+<li><p><code>lastStorage</code> refers to the most recent state of the EVM storage.  See
+{ref}<code>storage-type</code> for more details.</p></li>
+<li><p>You can use the variable <code>_</code> as a placeholder for a value you are not
+interested in.</p></li>
+<li><p>The maximum values for the different integer types are available as the
+ variables <code>max_uint</code>, <code>max_address</code>, <code>max_uint8</code>, <code>max_uint16</code> etc.</p>
+<ul>
+<li><code>nativeBalances</code> is a mapping of the native token balances, i.e. ETH for Ethereum.
+The balance of an <code>address a</code> can be expressed using <code>nativeBalances[a]</code>.</li>
+</ul></li>
+<li><p><code>calledContract</code> is only available in {ref}<code>function summaries &lt;function-summary&gt;</code>.
+It refers to the receiver contract of a summarized method call.</p></li>
+<li><p><code>executingContract</code> is only available in {ref}<code>hooks &lt;hooks&gt;</code>.  It refers to
+the contract that is executing when the hook is triggered.</p></li>
+</ul>
+<p>CVL also has several built-in functions for converting between
+numeric types.  See {ref}<code>math-ops</code> for details.</p>
+<p>(call-expr)=</p>
+<h2>Calling contract functions</h2>
+<p>There are many kinds of function-like things that can be called from CVL:</p>
+<ul>
+<li>Contract functions</li>
+<li>{ref}<code>Method variables &lt;method-type&gt;</code></li>
+<li>{ref}<code>ghost-functions</code></li>
+<li>{doc}<code>functions</code></li>
+<li>{doc}<code>defs</code></li>
+</ul>
+<p>There are several additional features that can be used when calling contract
+functions (including calling them through {ref}<code>method variables &lt;method-type&gt;</code>).</p>
+<p>The method name can optionally be prefixed by a contract name.  If a contract is
+not explicitly named, the method will be called with <code>currentContract</code> as the
+receiver.</p>
+<p>It is possible for multiple contract methods to match the method call.  This can
+happen in two ways:
+ 1. The method to be called is a {ref}<code>method variable &lt;method-type&gt;</code>
+ 2. The method to be called is overloaded in the contract (i.e. there are two
+   methods of the same name), and the method is called with a {ref}<code>calldataarg
+   &lt;calldataarg&gt;</code> argument.</p>
+<p>In either case, the Prover will consider every possible resolution of the method
+while verifying the rule, and will provide a separate verification report for
+each checked method.  Rules that use this feature are referred to as
+{term}<code>parametric rule</code>s.</p>
+<p>(with-revert)=
+After the function name, but before the arguments, you can write an optional
+method tag, one of <code>@norevert</code> or <code>@withrevert</code>.
+ * <code>@norevert</code> indicates that examples where the method revert should not be
+   considered.  This is the default behavior if no tag is provided
+ * <code>@withrevert</code> indicates that examples that would revert should still be
+   considered.  In this case, the method will set the <code>lastReverted</code> and
+   <code>lastHasThrown</code> variables to <code>true</code> in case the called method reverts or
+   throws an exception.</p>
+<p><a href="https://github.com/Certora/Examples/blob/14668d39a6ddc67af349bc5b82f73db73349ef18/CVLByExample/storage/certora/specs/storage.spec#L45C19-L45C19"><code>withrevert</code> example</a></p>
+<p>After the method tag, the method arguments are provided.  Unless the method
+is declared {ref}<code>envfree &lt;envfree&gt;</code>, the first argument must be an
+{ref}<code>environment value &lt;env&gt;</code>.  The remaining arguments must either be a
+single {ref}<code>calldataarg value &lt;calldataarg&gt;</code>, or the same types of arguments
+that would normally be passed to the contract method.</p>
+<p>After the method arguments, a method invocation can optionally include <code>at s</code>
+where <code>s</code> is a {ref}<code>storage variable &lt;storage-type&gt;</code>.  This indicates that
+before the method is executed, the EVM state should be restored to the saved
+state <code>s</code>.</p>
+<h3>Type restrictions</h3>
+<p>When calling a contract function, the Prover must convert the arguments and
+return values from their Solidity types to their CVL types and vice-versa.
+There are some restrictions on the types that can be converted.  See
+{ref}<code>type-conversions</code> for more details.</p>
+<p>(storage-comparison)=</p>
+<h2>Comparing storage</h2>
+<p>As described in {ref}<code>the documentation on storage types &lt;storage-type&gt;</code>, CVL represents the entirety of the EVM and its
+{ref}<code>ghost state &lt;ghost-functions&gt;</code>
+in variables with <code>storage</code> type. Variables of this type can be checked for equality and inequality.</p>
+<p>The basic form of this expression is <code>s1 == s2</code>, where <code>s1</code> and <code>s2</code> are variables of type <code>storage</code>.
+This expression compares the states represented by <code>s1</code> and <code>s2</code>; that is, it checks equality of the following:</p>
+<ol>
+<li>The values in storage for all contracts,</li>
+<li>The balances of all contracts,</li>
+<li>The state of all ghost variables and functions</li>
+</ol>
+<p>Thus, if any field in any contract's storage differs between <code>s1</code> and <code>s2</code>, the expression will return <code>false</code>.
+The expression <code>s1 != s2</code> is shorthand for <code>!(s1 == s2)</code>.</p>
+<p>Storage comparisons also support narrowing the scope of comparison to specific components of the global
+state represented by <code>storage</code> variables. This syntax is <code>s1[r] == s2[r]</code> or <code>s1[r] != s2[r]</code>, where <code>r</code> is a "storage comparison basis",
+and <code>s1</code> and <code>s2</code> are variables of type <code>storage</code>. The valid bases of comparison are:</p>
+<ol>
+<li>The name of a contract imported with a {ref}<code>using statement &lt;using-stmt&gt;</code>,</li>
+<li>The keyword <code>nativeBalances</code>, or</li>
+<li>The name of a ghost variable or function</li>
+</ol>
+<p>It is an error to use different bases on different sides of the comparison operator, and it is also
+an error to use a comparison basis on one side and not the other.
+The application of the basis restricts the comparison
+to only consider the portion of global state identified by the basis.</p>
+<p>If the qualifier is a contract identifier
+imported via <code>using</code>, then the comparison operation will only consider the storage fields of that contract. For example:</p>
+<p>```cvl
+using MyContract as c;
+using OtherContract as o;</p>
+<p>rule compare<em>state</em>of_c(env e) {
+   storage init = lastStorage;
+   o.mutateOtherState(e); // changes <code>o</code> but not <code>c</code>
+   assert lastStorage[c] == init[c];
+}
+```</p>
+<p>will pass verification whereas:</p>
+<p>```cvl
+using MyContract as c;
+using OtherContract as o;</p>
+<p>rule compare<em>state</em>of_c(env e) {
+   storage init = lastStorage;
+   c.mutateContractState(e); // changes <code>c</code>
+   assert lastStorage[c] == init[c];
+}
+```</p>
+<p>will not.</p>
+<p><code>{note}
+Comparing contract's state using this method will **not** compare the balance of the contract between the
+two states.
+</code></p>
+<p>If the qualifier is the identifier <code>nativeBalances</code>, then the account balances
+of all contracts are compared between the two storage states.
+Finally, if the basis is the name of a ghost function or variable, the values of that
+function/variable are compared between storage states.</p>
+<p>Two ghost functions are considered equal if they have the same outputs for all input arguments.</p>
+<p><code>{warning}
+The default behavior of the Prover on unresolved external calls is to pessimistically havoc contract
+state and balances. This behavior will render most storage comparisons that incorporate such
+state useless. Care should be taken (using {ref}`summarization &lt;summaries&gt;`) to ensure that rules
+that compare storage do not encounter this behavior.
+</code></p>
+<p><code>{warning}
+The grammar admits storage comparisons for both equality and inequality
+that occur arbitrarily nested within expressions. However, support within the Prover for
+these comparisons is primarily aimed at assertions of storage equality, e.g., `assert s1 == s2`.
+Support for storage inequality as well as nesting comparisons within other expressions is considered
+experimental.
+</code></p>
+<p><code>{warning}
+The storage comparison checks for exact equality between every single slot of storage which can
+lead to surprising failures of storage equality assertions.
+In particular, these failures can happen if an uninitialized storage slot is
+written and then later cleared by Solidity (via the `pop()` function or the `delete` keyword). After the
+clear operation the slot will definitely hold 0, but the Prover will not make any assumptions
+about the value of the uninitialized slot which means they can be considered different.
+</code></p>
+<p>(direct-storage-access)=</p>
+<h2>Direct storage access</h2>
+<p>The value of contract state variables can be directly accessed from CVL. These direct
+storage accesses are written using the state variable names and struct fields defined
+in the contract. For example, to access the state variable <code>uint x</code> defined in the <code>currentContract</code>,
+one can simply write <code>currentContract.x</code>. More complex structs can be accessed by chaining field selects
+and array/map dereference operations together. For example, if the current contract has the following
+type definitions and state variables:</p>
+<p><code>solidity
+contract Example {
+   struct Foo {
+      mapping (address =&gt; uint[]) bar;
+   }
+   Foo[3] myState;
+   uint32 luckyNumber;
+   address[] public addresses;
+}
+</code></p>
+<p>one can write <code>currentContract.myState[0].bar[addr][0]</code>, where <code>addr</code> is a CVL variable of type <code>address</code>.</p>
+<p>The storage of contracts other than the <code>currentContract</code> can be accessed by writing the contract identifier
+bound with a {ref}<code>using statement &lt;using-stmt&gt;</code>. For example, if the <code>myState</code> definition above appeared in
+a contract called <code>Test</code> and the current CVL file included  <code>using Test as t;</code> one could write <code>t.myState[0].bar[addr][0]</code>.</p>
+<p><code>{note}
+A contract identifier (or `currentContract`) *must* be included in the direct storage access. In other
+words, writing just `myState[0].bar[addr][0]` will not work, even if `myState` is declared in the current contract.
+</code></p>
+<p>Currently only primitive values (e.g., <code>uint</code>, <code>bytes3</code>, <code>bool</code>, enums, and user defined value types) can be directly accessed.
+Attempting to access more complex types will yield a type checking error. For example, attempting to access
+an entire array with <code>currentContract.myState[0].bar[addr]</code> will fail.</p>
+<p><code>{note}
+Although entire arrays cannot be accessed, the _length_ or the _number of elements_ of the dynamic arrays
+can be accessed with `.length`, e.g., `currentContract.myState[0].bar[addr].length`.
+</code></p>
+<p><code>{warning}
+Direct storage access is an experimental feature, and relies on several internal program analyses which can sometimes fail. For example, attempts to use direct storage access to refer to variable which is actually unused or inaccessible in the contract.
+If these internal static analyses fail, any rules that use direct storage access will fail during processing. If this
+occurs, check the "Global Problems" view of the web report and contact Certora for assistance.
+</code></p>
+<h3>Direct storage havoc</h3>
+<p>The same direct storage syntax can also be used in <code>havoc</code> statements. With the previously-mentioned <code>Example</code> contract and <code>using Example as ex</code>, you can write <code>havoc ex.luckyNumber</code> or <code>havoc addresses[10]</code> or even <code>havoc addresses.length</code>.</p>
+<p>While you may use a <code>havoc assuming</code> statement, unlike <a href="ghosts">ghosts</a>, you cannot directly refer to the havoced storage path in the <code>assuming</code> expression using the <code>@old</code> and <code>@new</code> syntax. This generally means <code>assuming</code> expressions are not as useful with direct storage access, so consider using and unconditional <code>havoc</code> statements instead of <code>havoc assuming</code>.</p>
+<p><code>{warning}
+As with direct storage access in general, direct storage havoc is experimental and limited to primitive types. In particular, this mean you _cannot_ currently havoc
+* entire arrays or entire mappings (only arrays at a specific index, or mappings at a specific key)
+* user-defined types such as structs, or arrays/mappings of such types
+* enums
+</code></p>
+<p>(direct-immutable-access)=</p>
+<h3>Direct immutable access</h3>
+<p>The Certora Prover allows to access immutable variables in a contract, in
+a similar way to direct storage access.
+For example, given a contract:
+```solidity
+contract WithImmutables {
+  address private immutable myImmutAddr;
+  bool public immutable myImmutBool;</p>
+<p>constructor() { ... }
+  function publicGetterForPrivateImmutableAddr() external returns (address) {
+    return myImmutAddr;
+  }
+}
+``` </p>
+<p>We can access both <code>myImmutAddr</code> and <code>myImmutBool</code> directly from CVL
+like this:
+```cvl
+using WithImmutables as withImmutables;</p>
+<p>methods {
+  function publicGetterForPrivateImmutableAddr() external returns (address) envfree;
+  function myImmutBool() external returns (bool) envfree;
+}</p>
+<p>rule accessPrivateImmut {
+  assert withImmutables.myImmutAddr == publicGetterForPrivateImmutableAddr();
+}</p>
+<p>rule accessPublicImmut {
+  assert withImmutables.myImmutBool == withImmutables.myImmutBool();
+}
+```</p>
+<p>The advantages of direct immutable access is that there is no need to 
+declare <code>envfree</code> methods for the public immutables, and even more importantly, nor is there a need to harness contracts in order to
+expose the private immutables.</p>
+<h2>Built-in Functions</h2>
+<h3>Hashing</h3>
+<p>CVL allows to use Solidity's <code>keccak256</code> hashing function directly in spec. Below are two usage examples: one using a <code>bytes</code> array, another using primitives.
+As <code>bytes32</code> is the return type of <code>keccak256</code> and is a primitive type, calls to <code>keccak256</code> can be nested.</p>
+<p>(Currently, only the <code>keccak256</code> hash is supported in CVL as a built-in.)</p>
+<h4>Example</h4>
+<p>Given the following Solidity snippet:
+```solidity
+contract HashingExample {
+  struct SignedMessage {
+    address sender;
+    uint256 nonce;
+    bytes signature;
+  }</p>
+<p>mapping (bytes32 =&gt; uint256) messageToValue;</p>
+<p>function hashingScheme1(SignedMessage memory s) public pure returns (bytes32) {
+    return keccak256(abi.encode(s.sender, s.nonce));
+  }</p>
+<p>function hashingScheme2(SignedMessage memory s) public pure returns (bytes32) {
+    return keccak256(s.signature);
+  }</p>
+<p>function hashingScheme3(SignedMessage memory s) public pure returns (bytes32) {
+    return keccak256(abi.encode(s.sender, s.nonce, keccak256(s.signature)));
+  }</p>
+<p>function hashingScheme4(SignedMessage memory s) public pure returns (bytes32) {
+    return keccak256(abi.encode(s.sender, s.nonce, s.signature));
+  }
+}
+```</p>
+<p>The hashing schemes described by <code>hashingScheme1</code>, <code>hashingScheme2</code>, and <code>hashingScheme3</code> can be replicated in CVL as follows:
+```
+function hashingScheme1CVL(HashingExample.SignedMessage s) returns bytes32 {
+  return keccak256(s.sender, s.nonce);
+}</p>
+<p>function hashingScheme2CVL(HashingExample.SignedMessage s) returns bytes32 {
+  return keccak256(s.signature);
+}</p>
+<p>function hashingScheme3CVL(HashingExample.SignedMessage s) returns bytes32 {
+  return keccak256(s.sender, s.nonce, keccak256(s.signature));
+}
+```</p>
+<p>The scheme implemented in <code>hashingScheme4</code> is not supported at the moment, as it combines a <code>bytes</code> type with primitives.
+The <code>keccak256</code> built-in function supports two kinds of inputs:
+- a single <code>bytes</code> parameter
+- a list of primitive (e.g., <code>uint256</code>, <code>uint8</code>, <code>addresss</code>) parameters</p>
+<p><code>{note}
+`keccak256` is currently ***unsupported*** in quantified expressions.
+</code></p>
+<p>(ecrecover)=</p>
+<h3>ECRecover</h3>
+<p>The <code>ecrecover</code> function in Solidity is helpful in recovering the signer's address from a signed message.
+It exists in very similar form in CVL and receives exactly the same parameter types as its Solidity counterpart.</p>
+<p><code>{note}
+`ecrecover` is ***supported*** in quantified expressions.
+</code></p>
+<p>The Prover's model of <code>ecrecover</code> does not actually implement the elliptical curve recovery algorithm, and is instead implemented using an {ref}<code>uninterpreted function &lt;uninterp-functions&gt;</code>. Like all uninterpreted functions, {ref}<code>axioms &lt;glossary&gt;</code> can be added to make the behavior of CVL's <code>ecrecover</code> more faithfully model the actual key recovery algorithm.</p>
+<p>There is a useful set of axioms that can be encoded in CVL to make the modeled behavior of <code>ecrecover</code> more precise and less likely to create false counterexamples:
+<code>cvl
+function ecrecoverAxioms() {
+  // zero value:
+  require (forall uint8 v. forall bytes32 r. forall bytes32 s. ecrecover(to_bytes32(0), v, r, s) == 0);
+  // uniqueness of signature
+  require (forall uint8 v. forall bytes32 r. forall bytes32 s. forall bytes32 h1. forall bytes32 h2.
+    h1 != h2 =&gt; ecrecover(h1, v, r, s) != 0 =&gt; ecrecover(h2, v, r, s) == 0);
+  // dependency on r and s
+  require (forall bytes32 h. forall uint8 v. forall bytes32 s. forall bytes32 r1. forall bytes32 r2.
+    r1 != r2 =&gt; ecrecover(h, v, r1, s) != 0 =&gt; ecrecover(h, v, r2, s) == 0);
+  require (forall bytes32 h. forall uint8 v. forall bytes32 r. forall bytes32 s1. forall bytes32 s2.
+    s1 != s2 =&gt; ecrecover(h, v, r, s1) != 0 =&gt; ecrecover(h, v, r, s2) == 0);
+}
+</code></p>
+<h4>Example</h4>
+<p>Given the following Solidity snippet:
+<code>solidity
+contract ECExample {
+  function wrap_ecrecover(bytes32 digest, uint8 v, bytes32 r, bytes32 s) public pure returns (address) {
+    return ecrecover(digest,v,r,s);
+  }
+}
+</code></p>
+<p>The following CVL function is equivalent to the <code>wrap_ecrecover</code> function in the Solidity snippet:
+<code>cvl
+function wrap_ecrecoverCVL(bytes32 digest, uint8 v, bytes32 r, bytes32 s) returns address {
+  return ecrecover(digest,v,r,s);
+}
+</code></p>
+<html><head><meta content="https://github.com/Certora/Documentation/cvl/expr.md" name="source"/><meta content="https://github.com/Certora/Documentation/cvl/expr.md" name="url"/><meta content="Type restrictions" name="title"/><meta content="Expressions
+A CVL expression is anything that represents a value.  This page documents all
+possible expressions in CVL and explains how they are evaluated.
+{contents}
+
+Syntax
+The syntax for CVL expres" name="text"/></head><body><div style="background-color: #f0f0f0; padding: 10px; margin-bottom: 20px;">Source: https://github.com/Certora/Documentation/cvl/expr.md</div><h1>Expressions</h1>
+<p>A CVL expression is anything that represents a value.  This page documents all
+possible expressions in CVL and explains how they are evaluated.</p>
+<p><code>{contents}
+</code></p>
+<h2>Syntax</h2>
+<p>The syntax for CVL expressions is given by the following <a href="ebnf-syntax">EBNF grammar</a>:</p>
+<p>```
+expr ::= literal
+       | unop expr
+       | expr binop expr
+       | "(" exprs ")"
+       | expr "?" expr ":" expr
+       | [ "forall" | "exists" ] type id "." expr</p>
+<pre><code>   | expr "." id
+   | id [ "[" expr "]" { "[" expr "]" } ]
+   | id "(" types ")"
+
+   | function_call
+
+   | expr "in" id
+</code></pre>
+<p>function_call ::=
+       | [ id "." ] id
+         [ "@" ( "norevert" | "withrevert" | "dontsummarize" ) ]
+         "(" exprs ")"
+         [ "at" id ]</p>
+<p>literal ::= "true" | "false" | number | string</p>
+<p>unop  ::= "~" | "!" | "-"</p>
+<p>binop ::= "+" | "-" | "*" | "/" | "%" | "^"
+        | "&gt;" | "&lt;" | "==" | "!=" | "&gt;=" | "&lt;="
+        | "&amp;" | "|" | "&lt;&lt;" | "&gt;&gt;" | "&amp;&amp;" | "||"
+        | "=&gt;" | "&lt;=&gt;" | "xor" | "&gt;&gt;&gt;"</p>
+<p>specials_fields ::=
+           | "block" "." [ "number" | "timestamp" ]
+           | "msg"   "." [ "address" | "sender" | "value" ]
+           | "tx"    "." [ "origin" ]
+           | "length"
+           | "selector" | "isPure" | "isView" | "numberOfArguments" | "isFallback"</p>
+<p>special<em>vars ::=
+           | "lastReverted" | "lastHasThrown"
+           | "lastStorage"
+           | "allContracts"
+           | "lastMsgSig"
+           | "</em>"
+           | "max<em>uint" | "max</em>address" | "max<em>uint8" | ... | "max</em>uint256"
+           | "nativeBalances"
+           | "calledContract"
+           | "executingContract"</p>
+<p>cast<em>functions ::=
+    | require</em>functions | to<em>functions | assert</em>functions</p>
+<p>require<em>functions ::=
+    | "require</em>uint8" | ... | "require<em>uint256" | "require</em>int8" | ... | "require<em>int256" | "require</em>address"</p>
+<p>to<em>functions ::=
+    | "to</em>mathint" | "to<em>bytes1" | ... | "to</em>bytes32"</p>
+<p>assert<em>functions ::=
+   | "assert</em>uint8" | ... | "assert<em>uint256" | "assert</em>int8" | ... | "assert<em>int256" | "assert</em>address"</p>
+<p>contract ::= id | "currentContract"
+```</p>
+<p>See {doc}<code>basics</code> for the <code>id</code>, <code>number</code>, and <code>string</code> productions.
+See {doc}<code>types</code> for the <code>type</code> production.</p>
+<p>(math-ops)=</p>
+<h2>Basic operations</h2>
+<p>CVL provides the same basic arithmetic, comparison, bitwise, and logical
+operations for basic types that solidity does, with a few differences listed
+in this section and the next.  The <a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Operator_Precedence#table">precedence and associativity rules</a>
+are standard.</p>
+<p><code>{caution}
+One significant difference between CVL and Solidity is that in Solidity, `^`
+denotes bitwise exclusive or and `**` denotes exponentiation, whereas in CVL,
+`^` denotes exponentiation and `xor` denotes exclusive or.
+</code></p>
+<p>% TODO: migrate this information here.
+See {ref}<code>cvl2-integer-types</code> for more information about the interaction between
+mathematical types and the meaning of mathematical operations.</p>
+<p>(struct-comparison)=</p>
+<h2>Struct Comparison</h2>
+<p>CVL supports equality comparison of structs under the following restrictions:</p>
+<ul>
+<li>The structs must be of the same type.</li>
+<li>The structs (or any nested structs) don't contain dynamic types (dynamic arrays, string, bytes).</li>
+<li>There's no support for comparison for structs fetched using direct-storage-access.</li>
+</ul>
+<p>Two structs will be evaluated as equal if and only if all the fields are equal.</p>
+<p>For example:</p>
+<p><code>cvl
+rule example(MyContract.MyStruct s) {
+    env e;
+    assert s == currentContract.myStructGetter(e);
+}
+</code></p>
+<p>(logic-exprs)=</p>
+<h2>Extended logical operations</h2>
+<p>CVL also adds several useful logical operations:</p>
+<ul>
+<li><p>Like <code>&amp;&amp;</code> or <code>||</code>, an <em>implication</em> expression <code>expr1 =&gt; expr2</code> requires
+<code>expr1</code> and <code>expr2</code> to be boolean expressions and is itself a boolean
+expression.  <code>expr1 =&gt; expr2</code> evaluates to <code>false</code> if and only if <code>expr1</code>
+evaluates to <code>true</code> and <code>expr2</code> evaluates to <code>false</code>.  <code>expr1 =&gt; expr2</code> is
+equivalent to <code>!expr1 || expr2</code>.</p>
+<p>For example, the statement <code>assert initialized =&gt; x &gt; 0;</code> will only report
+counterexamples where <code>initialized</code> is true but <code>x</code> is not positive.</p></li>
+<li><p>The short-circuiting behavior of implications (<code>=&gt;</code>) and other boolean connectors in CVL mirrors the
+short-circuiting behavior seen in standard logical operators (<code>&amp;&amp;</code> and <code>||</code>). In practical
+terms, this implies that the evaluation process is terminated as soon as the final result
+can be determined without necessitating further computation.
+For example, when dealing with an implication expression like <code>expr1 =&gt; expr2</code>, if the
+evaluation of <code>expr1</code> results in false, there is no need to proceed with evaluating
+<code>expr2</code> since the overall result is already known. This aligns with the common
+short-circuiting behavior found in traditional logical operators.</p></li>
+<li><p>Similarly, an <em>if and only if</em> expression (also called a <em>bidirectional implication</em>)
+<code>expr1 &lt;=&gt; expr2</code> requires <code>expr1</code> and <code>expr2</code> to be boolean
+expressions and is itself a boolean expression.  <code>expr1 &lt;=&gt; expr2</code> evaluates
+to <code>true</code> if <code>expr1</code> and <code>expr2</code> evaluate to the same boolean value.</p>
+<p>For example, the statement <code>assert balanceA &gt; 0 &lt;=&gt; balanceB &gt; 0;</code> will
+report a violation if exactly one of <code>balanceA</code> and <code>balanceB</code> is positive.</p></li>
+<li><p>An <em>if-then-else</em> (<em>ITE</em>) expression of the form
+<code>cond ? expr1 : expr2</code> requires <code>cond</code> to be a boolean expression and
+requires <code>expr1</code> and <code>expr2</code> to have the same type; the entire
+if-then-else expression has the same type as <code>expr1</code> and <code>expr2</code>.  The
+expression <code>cond ? expr1 : expr2</code> should be read "if <code>cond</code> then <code>expr1</code>
+else <code>expr2</code>.  If <code>cond</code> evaluates to <code>true</code> then the entire
+expression evaluates to <code>expr1</code>; otherwise the entire expression evaluates
+to <code>expr2</code>.</p>
+<p>For example, the expression
+<code>cvl
+uint balance = address == owner ? ownerBalance()
+                                : userBalance(address);
+</code>
+will set <code>balance</code> to <code>ownerBalance()</code> if <code>address</code> is <code>owner</code>, and will set
+it to <code>userBalance(address)</code> otherwise.</p>
+<p>Conditional expressions are <em>short-circuiting</em>: if <code>expr1</code> or <code>expr2</code> have
+side-effects (such as updating a {ref}<code>ghost variable &lt;ghost-variables&gt;</code>), only the
+side-effects of the expression that is chosen are performed.</p>
+<p>Regarding the logical operator precedence, <code>=&gt;</code> has higher precedence than <code>&lt;=&gt;</code>,
+and unlike math operators both are <em>right</em> associative, so <code>expr1 =&gt; expr2 =&gt; expr3</code>
+is equivalent to <code>expr1 =&gt; (expr2 =&gt; expr3)</code>.</p></li>
+<li><p>A <em>universal</em> expression of the form <code>forall t v . expr</code> requires <code>t</code>
+to be a <a href="types">type</a> (such as <code>uint256</code> or <code>address</code>) and <code>v</code> to be
+a variable name; <code>expr</code> should be a boolean expression and may refer to
+the identifier <code>v</code>.  The expression evaluates to <code>true</code> if <em>every</em> possible
+value of the variable <code>v</code> causes <code>expr</code> to evaluate to <code>true</code>.</p>
+<p>For example, the statement
+<code>cvl
+require (forall address user . balance(user) &lt;= balance(biggestUser));
+</code>
+will ensure that every other user has a balance that is less than or equal
+to the balance of <code>biggestUser</code>.</p></li>
+<li><p>Like a universal expression, an <em>existential</em> expression of the form
+<code>exists t v . expr</code> requires <code>t</code> to be a <a href="types">type</a> and <code>v</code> to be a
+variable name; <code>expr</code> should be a boolean expression and may refer to the
+variable <code>v</code>.  The expression evaluates to <code>true</code> if there is <em>any</em> possible
+value of the variable <code>v</code> that causes <code>expr</code> to evaluate to <code>true</code>.</p>
+<p>For example, the statement
+<code>cvl
+require (exists uint t . priceAtTime(t) != 0);
+</code>
+will ensure that there is some time for which the price is nonzero.</p></li>
+</ul>
+<p><code>{note}
+The symbols `forall` and `exist` are sometimes referred to as {term}`quantifier`s,
+and expressions of the form `forall type v . e` and `exist type v . e` are
+referred to as {term}`quantified expression`s.
+</code></p>
+<p>```<code>{caution}
+</code>forall<code>and</code>exists` expressions are powerful and elegant ways to express rules
+and invariants, but they require the Prover to consider all possible values of
+a given type.  In some cases they can cause significant slowdowns for the
+Prover.</p>
+<p>If you have rules or invariants using <code>exists</code> that are running slowly or
+timing out, you can remove the <code>exists</code> by manually computing the value that
+exists.  For example, you might replace
+<code>cvl
+require (exists uint t . priceAtTime(t) != 0);
+</code>
+with
+<code>cvl
+require priceAtTime(startTime) != 0;
+</code></p>
+<p>````</p>
+<p><code>{caution}
+Calling contract functions within the body of a quantified expression is an
+experimental feature and may not work as intended.
+</code></p>
+<p><code>{note}
+The Prover uses approximations that may cause spurious counterexamples in rules
+that use quantifiers.  For example, a rule that requires a quantified statement
+may produce a counterexample that doesn't satisfy the requirement.  The
+approximation is {term}`sound`: it won't cause violations to be hidden.  See
+{ref}`grounding` for more detail.
+</code></p>
+<h2>Accessing fields and arrays</h2>
+<p>One can access the special fields of built-in types, fields of user-defined
+<code>struct</code> types, and members of user-defined <code>enum</code> types using the normal
+<code>expr.field</code> notation.  Note that as described in {ref}<code>user-types</code>,
+access to user-defined types must be qualified by a contract name.</p>
+<p>Access to arrays also uses the same syntax as Solidity.</p>
+<h2>Contracts, method signatures and their properties</h2>
+<p>Writing the ABI signature for a contract method produces a <code>method</code> object,
+which can be used to access the {ref}<code>method fields &lt;method-type&gt;</code>.</p>
+<p>For example,
+<code>cvl
+method m;
+require m.selector == sig:balanceOf(address).selector
+     || m.selector == sig:transfer(address, uint256).selector;
+</code>
+will constrain <code>m</code> to be either the <code>balanceOf</code> or the <code>transfer</code> method.</p>
+<p>One can determine whether a contract has a particular method using the <code>s in c</code>
+where <code>s</code> is a method selector and <code>c</code> is a contract (either <code>currentContract</code>
+or a contract introduced with a {ref}<code>using statement &lt;using-stmt&gt;</code>.  For
+example, the statement
+<code>cvl
+if (burnFrom(address,uint256).selector in currentContract) {
+  ...
+}
+</code>
+will check that the current contract supports the optional <code>burnFrom</code> method.</p>
+<p>(special-fields)=
+(currentContract)=</p>
+<h2>Special variables and fields</h2>
+<p>Several of the CVL types have special fields; see {doc}<code>types</code> (particularly
+{ref}<code>env</code>, {ref}<code>method-type</code>, and {ref}<code>arrays</code>).</p>
+<p>There are also several built-in variables:</p>
+<ul>
+<li><p><code>address currentContract</code> always refers to the main contract being verified
+(that is, the contract named in the {ref}<code>--verify</code> option).</p></li>
+<li><p><code>bool lastReverted</code> and <code>bool lastHasThrown</code> are boolean values that
+indicate whether the most recent contract function reverted or threw an
+exception.</p>
+<p>`<code>{caution}
+The variables `lastReverted` and `lastHasThrown` are updated after each
+contract call, even those called without `@withrevert` (see {ref}`call-expr`).
+This is a common source of errors.  For example, the following rule is
+vacuous:
+</code>cvl
+rule revert<em>if</em>paused() {
+  withdraw@withrevert();
+  assert isPaused() =&gt; lastReverted;
+}
+```</p>
+<p>In this rule, the call to <code>isPaused</code> will update <code>lastReverted</code> to <code>true</code>,
+overwriting the value set by <code>withdraw</code>.
+````</p></li>
+<li><p><code>lastStorage</code> refers to the most recent state of the EVM storage.  See
+{ref}<code>storage-type</code> for more details.</p></li>
+<li><p>You can use the variable <code>_</code> as a placeholder for a value you are not
+interested in.</p></li>
+<li><p>The maximum values for the different integer types are available as the
+ variables <code>max_uint</code>, <code>max_address</code>, <code>max_uint8</code>, <code>max_uint16</code> etc.</p>
+<ul>
+<li><code>nativeBalances</code> is a mapping of the native token balances, i.e. ETH for Ethereum.
+The balance of an <code>address a</code> can be expressed using <code>nativeBalances[a]</code>.</li>
+</ul></li>
+<li><p><code>calledContract</code> is only available in {ref}<code>function summaries &lt;function-summary&gt;</code>.
+It refers to the receiver contract of a summarized method call.</p></li>
+<li><p><code>executingContract</code> is only available in {ref}<code>hooks &lt;hooks&gt;</code>.  It refers to
+the contract that is executing when the hook is triggered.</p></li>
+</ul>
+<p>CVL also has several built-in functions for converting between
+numeric types.  See {ref}<code>math-ops</code> for details.</p>
+<p>(call-expr)=</p>
+<h2>Calling contract functions</h2>
+<p>There are many kinds of function-like things that can be called from CVL:</p>
+<ul>
+<li>Contract functions</li>
+<li>{ref}<code>Method variables &lt;method-type&gt;</code></li>
+<li>{ref}<code>ghost-functions</code></li>
+<li>{doc}<code>functions</code></li>
+<li>{doc}<code>defs</code></li>
+</ul>
+<p>There are several additional features that can be used when calling contract
+functions (including calling them through {ref}<code>method variables &lt;method-type&gt;</code>).</p>
+<p>The method name can optionally be prefixed by a contract name.  If a contract is
+not explicitly named, the method will be called with <code>currentContract</code> as the
+receiver.</p>
+<p>It is possible for multiple contract methods to match the method call.  This can
+happen in two ways:
+ 1. The method to be called is a {ref}<code>method variable &lt;method-type&gt;</code>
+ 2. The method to be called is overloaded in the contract (i.e. there are two
+   methods of the same name), and the method is called with a {ref}<code>calldataarg
+   &lt;calldataarg&gt;</code> argument.</p>
+<p>In either case, the Prover will consider every possible resolution of the method
+while verifying the rule, and will provide a separate verification report for
+each checked method.  Rules that use this feature are referred to as
+{term}<code>parametric rule</code>s.</p>
+<p>(with-revert)=
+After the function name, but before the arguments, you can write an optional
+method tag, one of <code>@norevert</code> or <code>@withrevert</code>.
+ * <code>@norevert</code> indicates that examples where the method revert should not be
+   considered.  This is the default behavior if no tag is provided
+ * <code>@withrevert</code> indicates that examples that would revert should still be
+   considered.  In this case, the method will set the <code>lastReverted</code> and
+   <code>lastHasThrown</code> variables to <code>true</code> in case the called method reverts or
+   throws an exception.</p>
+<p><a href="https://github.com/Certora/Examples/blob/14668d39a6ddc67af349bc5b82f73db73349ef18/CVLByExample/storage/certora/specs/storage.spec#L45C19-L45C19"><code>withrevert</code> example</a></p>
+<p>After the method tag, the method arguments are provided.  Unless the method
+is declared {ref}<code>envfree &lt;envfree&gt;</code>, the first argument must be an
+{ref}<code>environment value &lt;env&gt;</code>.  The remaining arguments must either be a
+single {ref}<code>calldataarg value &lt;calldataarg&gt;</code>, or the same types of arguments
+that would normally be passed to the contract method.</p>
+<p>After the method arguments, a method invocation can optionally include <code>at s</code>
+where <code>s</code> is a {ref}<code>storage variable &lt;storage-type&gt;</code>.  This indicates that
+before the method is executed, the EVM state should be restored to the saved
+state <code>s</code>.</p>
+<h3>Type restrictions</h3>
+<p>When calling a contract function, the Prover must convert the arguments and
+return values from their Solidity types to their CVL types and vice-versa.
+There are some restrictions on the types that can be converted.  See
+{ref}<code>type-conversions</code> for more details.</p>
+<p>(storage-comparison)=</p>
+<h2>Comparing storage</h2>
+<p>As described in {ref}<code>the documentation on storage types &lt;storage-type&gt;</code>, CVL represents the entirety of the EVM and its
+{ref}<code>ghost state &lt;ghost-functions&gt;</code>
+in variables with <code>storage</code> type. Variables of this type can be checked for equality and inequality.</p>
+<p>The basic form of this expression is <code>s1 == s2</code>, where <code>s1</code> and <code>s2</code> are variables of type <code>storage</code>.
+This expression compares the states represented by <code>s1</code> and <code>s2</code>; that is, it checks equality of the following:</p>
+<ol>
+<li>The values in storage for all contracts,</li>
+<li>The balances of all contracts,</li>
+<li>The state of all ghost variables and functions</li>
+</ol>
+<p>Thus, if any field in any contract's storage differs between <code>s1</code> and <code>s2</code>, the expression will return <code>false</code>.
+The expression <code>s1 != s2</code> is shorthand for <code>!(s1 == s2)</code>.</p>
+<p>Storage comparisons also support narrowing the scope of comparison to specific components of the global
+state represented by <code>storage</code> variables. This syntax is <code>s1[r] == s2[r]</code> or <code>s1[r] != s2[r]</code>, where <code>r</code> is a "storage comparison basis",
+and <code>s1</code> and <code>s2</code> are variables of type <code>storage</code>. The valid bases of comparison are:</p>
+<ol>
+<li>The name of a contract imported with a {ref}<code>using statement &lt;using-stmt&gt;</code>,</li>
+<li>The keyword <code>nativeBalances</code>, or</li>
+<li>The name of a ghost variable or function</li>
+</ol>
+<p>It is an error to use different bases on different sides of the comparison operator, and it is also
+an error to use a comparison basis on one side and not the other.
+The application of the basis restricts the comparison
+to only consider the portion of global state identified by the basis.</p>
+<p>If the qualifier is a contract identifier
+imported via <code>using</code>, then the comparison operation will only consider the storage fields of that contract. For example:</p>
+<p>```cvl
+using MyContract as c;
+using OtherContract as o;</p>
+<p>rule compare<em>state</em>of_c(env e) {
+   storage init = lastStorage;
+   o.mutateOtherState(e); // changes <code>o</code> but not <code>c</code>
+   assert lastStorage[c] == init[c];
+}
+```</p>
+<p>will pass verification whereas:</p>
+<p>```cvl
+using MyContract as c;
+using OtherContract as o;</p>
+<p>rule compare<em>state</em>of_c(env e) {
+   storage init = lastStorage;
+   c.mutateContractState(e); // changes <code>c</code>
+   assert lastStorage[c] == init[c];
+}
+```</p>
+<p>will not.</p>
+<p><code>{note}
+Comparing contract's state using this method will **not** compare the balance of the contract between the
+two states.
+</code></p>
+<p>If the qualifier is the identifier <code>nativeBalances</code>, then the account balances
+of all contracts are compared between the two storage states.
+Finally, if the basis is the name of a ghost function or variable, the values of that
+function/variable are compared between storage states.</p>
+<p>Two ghost functions are considered equal if they have the same outputs for all input arguments.</p>
+<p><code>{warning}
+The default behavior of the Prover on unresolved external calls is to pessimistically havoc contract
+state and balances. This behavior will render most storage comparisons that incorporate such
+state useless. Care should be taken (using {ref}`summarization &lt;summaries&gt;`) to ensure that rules
+that compare storage do not encounter this behavior.
+</code></p>
+<p><code>{warning}
+The grammar admits storage comparisons for both equality and inequality
+that occur arbitrarily nested within expressions. However, support within the Prover for
+these comparisons is primarily aimed at assertions of storage equality, e.g., `assert s1 == s2`.
+Support for storage inequality as well as nesting comparisons within other expressions is considered
+experimental.
+</code></p>
+<p><code>{warning}
+The storage comparison checks for exact equality between every single slot of storage which can
+lead to surprising failures of storage equality assertions.
+In particular, these failures can happen if an uninitialized storage slot is
+written and then later cleared by Solidity (via the `pop()` function or the `delete` keyword). After the
+clear operation the slot will definitely hold 0, but the Prover will not make any assumptions
+about the value of the uninitialized slot which means they can be considered different.
+</code></p>
+<p>(direct-storage-access)=</p>
+<h2>Direct storage access</h2>
+<p>The value of contract state variables can be directly accessed from CVL. These direct
+storage accesses are written using the state variable names and struct fields defined
+in the contract. For example, to access the state variable <code>uint x</code> defined in the <code>currentContract</code>,
+one can simply write <code>currentContract.x</code>. More complex structs can be accessed by chaining field selects
+and array/map dereference operations together. For example, if the current contract has the following
+type definitions and state variables:</p>
+<p><code>solidity
+contract Example {
+   struct Foo {
+      mapping (address =&gt; uint[]) bar;
+   }
+   Foo[3] myState;
+   uint32 luckyNumber;
+   address[] public addresses;
+}
+</code></p>
+<p>one can write <code>currentContract.myState[0].bar[addr][0]</code>, where <code>addr</code> is a CVL variable of type <code>address</code>.</p>
+<p>The storage of contracts other than the <code>currentContract</code> can be accessed by writing the contract identifier
+bound with a {ref}<code>using statement &lt;using-stmt&gt;</code>. For example, if the <code>myState</code> definition above appeared in
+a contract called <code>Test</code> and the current CVL file included  <code>using Test as t;</code> one could write <code>t.myState[0].bar[addr][0]</code>.</p>
+<p><code>{note}
+A contract identifier (or `currentContract`) *must* be included in the direct storage access. In other
+words, writing just `myState[0].bar[addr][0]` will not work, even if `myState` is declared in the current contract.
+</code></p>
+<p>Currently only primitive values (e.g., <code>uint</code>, <code>bytes3</code>, <code>bool</code>, enums, and user defined value types) can be directly accessed.
+Attempting to access more complex types will yield a type checking error. For example, attempting to access
+an entire array with <code>currentContract.myState[0].bar[addr]</code> will fail.</p>
+<p><code>{note}
+Although entire arrays cannot be accessed, the _length_ or the _number of elements_ of the dynamic arrays
+can be accessed with `.length`, e.g., `currentContract.myState[0].bar[addr].length`.
+</code></p>
+<p><code>{warning}
+Direct storage access is an experimental feature, and relies on several internal program analyses which can sometimes fail. For example, attempts to use direct storage access to refer to variable which is actually unused or inaccessible in the contract.
+If these internal static analyses fail, any rules that use direct storage access will fail during processing. If this
+occurs, check the "Global Problems" view of the web report and contact Certora for assistance.
+</code></p>
+<h3>Direct storage havoc</h3>
+<p>The same direct storage syntax can also be used in <code>havoc</code> statements. With the previously-mentioned <code>Example</code> contract and <code>using Example as ex</code>, you can write <code>havoc ex.luckyNumber</code> or <code>havoc addresses[10]</code> or even <code>havoc addresses.length</code>.</p>
+<p>While you may use a <code>havoc assuming</code> statement, unlike <a href="ghosts">ghosts</a>, you cannot directly refer to the havoced storage path in the <code>assuming</code> expression using the <code>@old</code> and <code>@new</code> syntax. This generally means <code>assuming</code> expressions are not as useful with direct storage access, so consider using and unconditional <code>havoc</code> statements instead of <code>havoc assuming</code>.</p>
+<p><code>{warning}
+As with direct storage access in general, direct storage havoc is experimental and limited to primitive types. In particular, this mean you _cannot_ currently havoc
+* entire arrays or entire mappings (only arrays at a specific index, or mappings at a specific key)
+* user-defined types such as structs, or arrays/mappings of such types
+* enums
+</code></p>
+<p>(direct-immutable-access)=</p>
+<h3>Direct immutable access</h3>
+<p>The Certora Prover allows to access immutable variables in a contract, in
+a similar way to direct storage access.
+For example, given a contract:
+```solidity
+contract WithImmutables {
+  address private immutable myImmutAddr;
+  bool public immutable myImmutBool;</p>
+<p>constructor() { ... }
+  function publicGetterForPrivateImmutableAddr() external returns (address) {
+    return myImmutAddr;
+  }
+}
+``` </p>
+<p>We can access both <code>myImmutAddr</code> and <code>myImmutBool</code> directly from CVL
+like this:
+```cvl
+using WithImmutables as withImmutables;</p>
+<p>methods {
+  function publicGetterForPrivateImmutableAddr() external returns (address) envfree;
+  function myImmutBool() external returns (bool) envfree;
+}</p>
+<p>rule accessPrivateImmut {
+  assert withImmutables.myImmutAddr == publicGetterForPrivateImmutableAddr();
+}</p>
+<p>rule accessPublicImmut {
+  assert withImmutables.myImmutBool == withImmutables.myImmutBool();
+}
+```</p>
+<p>The advantages of direct immutable access is that there is no need to 
+declare <code>envfree</code> methods for the public immutables, and even more importantly, nor is there a need to harness contracts in order to
+expose the private immutables.</p>
+<h2>Built-in Functions</h2>
+<h3>Hashing</h3>
+<p>CVL allows to use Solidity's <code>keccak256</code> hashing function directly in spec. Below are two usage examples: one using a <code>bytes</code> array, another using primitives.
+As <code>bytes32</code> is the return type of <code>keccak256</code> and is a primitive type, calls to <code>keccak256</code> can be nested.</p>
+<p>(Currently, only the <code>keccak256</code> hash is supported in CVL as a built-in.)</p>
+<h4>Example</h4>
+<p>Given the following Solidity snippet:
+```solidity
+contract HashingExample {
+  struct SignedMessage {
+    address sender;
+    uint256 nonce;
+    bytes signature;
+  }</p>
+<p>mapping (bytes32 =&gt; uint256) messageToValue;</p>
+<p>function hashingScheme1(SignedMessage memory s) public pure returns (bytes32) {
+    return keccak256(abi.encode(s.sender, s.nonce));
+  }</p>
+<p>function hashingScheme2(SignedMessage memory s) public pure returns (bytes32) {
+    return keccak256(s.signature);
+  }</p>
+<p>function hashingScheme3(SignedMessage memory s) public pure returns (bytes32) {
+    return keccak256(abi.encode(s.sender, s.nonce, keccak256(s.signature)));
+  }</p>
+<p>function hashingScheme4(SignedMessage memory s) public pure returns (bytes32) {
+    return keccak256(abi.encode(s.sender, s.nonce, s.signature));
+  }
+}
+```</p>
+<p>The hashing schemes described by <code>hashingScheme1</code>, <code>hashingScheme2</code>, and <code>hashingScheme3</code> can be replicated in CVL as follows:
+```
+function hashingScheme1CVL(HashingExample.SignedMessage s) returns bytes32 {
+  return keccak256(s.sender, s.nonce);
+}</p>
+<p>function hashingScheme2CVL(HashingExample.SignedMessage s) returns bytes32 {
+  return keccak256(s.signature);
+}</p>
+<p>function hashingScheme3CVL(HashingExample.SignedMessage s) returns bytes32 {
+  return keccak256(s.sender, s.nonce, keccak256(s.signature));
+}
+```</p>
+<p>The scheme implemented in <code>hashingScheme4</code> is not supported at the moment, as it combines a <code>bytes</code> type with primitives.
+The <code>keccak256</code> built-in function supports two kinds of inputs:
+- a single <code>bytes</code> parameter
+- a list of primitive (e.g., <code>uint256</code>, <code>uint8</code>, <code>addresss</code>) parameters</p>
+<p><code>{note}
+`keccak256` is currently ***unsupported*** in quantified expressions.
+</code></p>
+<p>(ecrecover)=</p>
+<h3>ECRecover</h3>
+<p>The <code>ecrecover</code> function in Solidity is helpful in recovering the signer's address from a signed message.
+It exists in very similar form in CVL and receives exactly the same parameter types as its Solidity counterpart.</p>
+<p><code>{note}
+`ecrecover` is ***supported*** in quantified expressions.
+</code></p>
+<p>The Prover's model of <code>ecrecover</code> does not actually implement the elliptical curve recovery algorithm, and is instead implemented using an {ref}<code>uninterpreted function &lt;uninterp-functions&gt;</code>. Like all uninterpreted functions, {ref}<code>axioms &lt;glossary&gt;</code> can be added to make the behavior of CVL's <code>ecrecover</code> more faithfully model the actual key recovery algorithm.</p>
+<p>There is a useful set of axioms that can be encoded in CVL to make the modeled behavior of <code>ecrecover</code> more precise and less likely to create false counterexamples:
+<code>cvl
+function ecrecoverAxioms() {
+  // zero value:
+  require (forall uint8 v. forall bytes32 r. forall bytes32 s. ecrecover(to_bytes32(0), v, r, s) == 0);
+  // uniqueness of signature
+  require (forall uint8 v. forall bytes32 r. forall bytes32 s. forall bytes32 h1. forall bytes32 h2.
+    h1 != h2 =&gt; ecrecover(h1, v, r, s) != 0 =&gt; ecrecover(h2, v, r, s) == 0);
+  // dependency on r and s
+  require (forall bytes32 h. forall uint8 v. forall bytes32 s. forall bytes32 r1. forall bytes32 r2.
+    r1 != r2 =&gt; ecrecover(h, v, r1, s) != 0 =&gt; ecrecover(h, v, r2, s) == 0);
+  require (forall bytes32 h. forall uint8 v. forall bytes32 r. forall bytes32 s1. forall bytes32 s2.
+    s1 != s2 =&gt; ecrecover(h, v, r, s1) != 0 =&gt; ecrecover(h, v, r, s2) == 0);
+}
+</code></p>
+<h4>Example</h4>
+<p>Given the following Solidity snippet:
+<code>solidity
+contract ECExample {
+  function wrap_ecrecover(bytes32 digest, uint8 v, bytes32 r, bytes32 s) public pure returns (address) {
+    return ecrecover(digest,v,r,s);
+  }
+}
+</code></p>
+<p>The following CVL function is equivalent to the <code>wrap_ecrecover</code> function in the Solidity snippet:
+<code>cvl
+function wrap_ecrecoverCVL(bytes32 digest, uint8 v, bytes32 r, bytes32 s) returns address {
+  return ecrecover(digest,v,r,s);
+}
+</code></p>
+</body></html>

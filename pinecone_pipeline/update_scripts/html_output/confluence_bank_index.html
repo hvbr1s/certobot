@@ -1,0 +1,197 @@
+<h1>The Bank</h1>
+<h2>Rules in the Certora Verification Language</h2>
+<p>The Certora Prover verifies that a smart contract satisfies a set of rules written in a language called <em>Certora Verification Language (CVL)</em>. Each rule is checked on all possible inputs. Of course, this is not done by explicitly enumerating the inputs, but rather through symbolic techniques. Rules can check that a public contract method has the correct effects on the contract state or returns the correct value, etc... The syntax for expressing rules somewhat resembles Solidity, but also supports more features that are important for verification. </p>
+<p>Consider the following contract interface to implement a simple bank:</p>
+<p><code>solidity
+pragma solidity &gt;=0.4.24 &lt;0.8.0;
+contract Bank {
+  mapping (address =&gt; uint) public funds;
+  uint public totalFunds;
+  // get the current fund of an account
+  function getFunds(address account) public returns (uint)
+  // get the total funds in the bank
+  function getTotalFunds() public returns (uint)
+  // deposit an amount to an account
+  function deposit(uint amount) public payable
+  // transfer an amount to an account
+  function transfer(address account, uint amount) public
+  // withdraw all amounts
+  function withdraw() returns (bool) public
+}
+</code></p>
+<p>And here is a rule for verifying that withdraw either reverts or returns true.</p>
+<p><code>cvl
+rule withdraw_succeeds {
+  /* The env type represents the EVM parameters passed in every
+  call (msg.*, tx.*, block.* variables in solidity   */
+  env e;
+  // Invoke function withdraw and assume it does not revert
+  /* For non-envfree methods, the environment is passed as the first argument*/
+  bool success = withdraw(e);
+  assert success, "withdraw must succeed";
+}
+</code></p>
+<p>The rule calls withdraw with an arbitrary EVM environment (<code>e</code>) in an arbitrary initial state. It assumes that the function does not revert. The assert command checks that success is true on all potential executions. Notice that each Solidity function has an extra argument, which is the EVM environment.</p>
+<h2>Parametric rules</h2>
+<p>To simulate the execution of all functions in the contract, you can define a method argument in the rule and use it in invocation statements. For example:</p>
+<p><code>cvl
+rule others_can_only_increase_my_balance() {
+  method f; // an arbitrary function in the contract
+  env e;  // the execution environment
+  address other;
+  // Assume the actor and the other address are distinct
+  require e.msg.sender != other;
+  // Get the balance of `other` before the invocation
+  uint256 _balance = getFunds(other);
+  calldataarg arg; // any argument
+  f(e, arg); // successful (potentially state-changing!)
+  // Get the balance of `other` after the invocation
+  uint256 balance_ = getFunds(other);
+  assert _balance &lt;= balance_, "Reduced the balance of another address";
+}
+</code></p>
+<p>The Prover verifies that the conditions hold against any function call with any arguments.</p>
+<h2>Invariants</h2>
+<p>Invariants are a specification of a condition that should always be true once an operation is concluded. Syntax:</p>
+<ul>
+<li><code>invariant invariantName(args_list) exp</code> - Assume <code>exp</code> holds before execution of any method and verify exp must hold afterwards. The invariant "step" case above is equivalent to a rule:</li>
+</ul>
+<p><code>cvl
+rule invariantAsRule(method f) {
+  require exp;
+  calldataarg arg;
+  f(e,arg);
+  assert exp;
+}
+</code></p>
+<p>Unlike a rule, the invariant also checks that <code>exp</code> holds right after the constructor of the code.</p>
+<h3>Declaring functions used in the invariant</h3>
+<p>In the spec file, you need to define the Solidity functions used in the invariants. Here <code>env</code> ranges over all environments.</p>
+<p>```cvl
+methods {
+  getFunds(address) returns uint256
+}</p>
+<p>invariant address<em>zero</em>cannot<em>become</em>an_account(env e)
+  getFunds(e, 0) == 0
+```</p>
+<h3><code>envfree</code> functions</h3>
+<p>When a function is not using the environment, it can be declared as <code>envfree</code> to omit the call’s <code>env</code> argument. For example, <code>getFunds</code> is not using any of the environment variables:</p>
+<p>```cvl
+methods {
+  getFunds(address) returns uint256 envfree
+}</p>
+<p>invariant address<em>zero</em>cannot<em>become</em>an_account()
+  getFunds(0) == 0
+```</p>
+<p>(user-guide-output)=</p>
+<h2>Understanding the results of the Certora Prover</h2>
+<p>The Certora Prover produces a table with the verification results as a web
+page. For each rule, it either displays a thumbs-up if it formally proved the
+rule or displays an input that triggers a violation of the rule. For example,
+below is a violation of the rule <code>others_can_only_increase</code> when simulated on
+the transfer function. A call trace demonstrating the violation is shown. It
+shows the arguments passed to each simulated function and the resulting return
+value (displayed after the slash). This example shows that a transfer of an
+amount close to <code>MAX_INT</code> causes the balance of the recipient account to
+decrease.</p>
+<p><img alt="example output" src="output.png"/></p>
+<html><head><meta content="https://github.com/Certora/Documentation/confluence/bank/index.md" name="source"/><meta content="https://github.com/Certora/Documentation/confluence/bank/index.md" name="url"/><meta content="Declaring functions used in the invariant" name="title"/><meta content="The Bank
+Rules in the Certora Verification Language
+The Certora Prover verifies that a smart contract satisfies a set of rules written in a language called Certora Verification Language (CVL). Each ru" name="text"/></head><body><div style="background-color: #f0f0f0; padding: 10px; margin-bottom: 20px;">Source: https://github.com/Certora/Documentation/confluence/bank/index.md</div><h1>The Bank</h1>
+<h2>Rules in the Certora Verification Language</h2>
+<p>The Certora Prover verifies that a smart contract satisfies a set of rules written in a language called <em>Certora Verification Language (CVL)</em>. Each rule is checked on all possible inputs. Of course, this is not done by explicitly enumerating the inputs, but rather through symbolic techniques. Rules can check that a public contract method has the correct effects on the contract state or returns the correct value, etc... The syntax for expressing rules somewhat resembles Solidity, but also supports more features that are important for verification. </p>
+<p>Consider the following contract interface to implement a simple bank:</p>
+<p><code>solidity
+pragma solidity &gt;=0.4.24 &lt;0.8.0;
+contract Bank {
+  mapping (address =&gt; uint) public funds;
+  uint public totalFunds;
+  // get the current fund of an account
+  function getFunds(address account) public returns (uint)
+  // get the total funds in the bank
+  function getTotalFunds() public returns (uint)
+  // deposit an amount to an account
+  function deposit(uint amount) public payable
+  // transfer an amount to an account
+  function transfer(address account, uint amount) public
+  // withdraw all amounts
+  function withdraw() returns (bool) public
+}
+</code></p>
+<p>And here is a rule for verifying that withdraw either reverts or returns true.</p>
+<p><code>cvl
+rule withdraw_succeeds {
+  /* The env type represents the EVM parameters passed in every
+  call (msg.*, tx.*, block.* variables in solidity   */
+  env e;
+  // Invoke function withdraw and assume it does not revert
+  /* For non-envfree methods, the environment is passed as the first argument*/
+  bool success = withdraw(e);
+  assert success, "withdraw must succeed";
+}
+</code></p>
+<p>The rule calls withdraw with an arbitrary EVM environment (<code>e</code>) in an arbitrary initial state. It assumes that the function does not revert. The assert command checks that success is true on all potential executions. Notice that each Solidity function has an extra argument, which is the EVM environment.</p>
+<h2>Parametric rules</h2>
+<p>To simulate the execution of all functions in the contract, you can define a method argument in the rule and use it in invocation statements. For example:</p>
+<p><code>cvl
+rule others_can_only_increase_my_balance() {
+  method f; // an arbitrary function in the contract
+  env e;  // the execution environment
+  address other;
+  // Assume the actor and the other address are distinct
+  require e.msg.sender != other;
+  // Get the balance of `other` before the invocation
+  uint256 _balance = getFunds(other);
+  calldataarg arg; // any argument
+  f(e, arg); // successful (potentially state-changing!)
+  // Get the balance of `other` after the invocation
+  uint256 balance_ = getFunds(other);
+  assert _balance &lt;= balance_, "Reduced the balance of another address";
+}
+</code></p>
+<p>The Prover verifies that the conditions hold against any function call with any arguments.</p>
+<h2>Invariants</h2>
+<p>Invariants are a specification of a condition that should always be true once an operation is concluded. Syntax:</p>
+<ul>
+<li><code>invariant invariantName(args_list) exp</code> - Assume <code>exp</code> holds before execution of any method and verify exp must hold afterwards. The invariant "step" case above is equivalent to a rule:</li>
+</ul>
+<p><code>cvl
+rule invariantAsRule(method f) {
+  require exp;
+  calldataarg arg;
+  f(e,arg);
+  assert exp;
+}
+</code></p>
+<p>Unlike a rule, the invariant also checks that <code>exp</code> holds right after the constructor of the code.</p>
+<h3>Declaring functions used in the invariant</h3>
+<p>In the spec file, you need to define the Solidity functions used in the invariants. Here <code>env</code> ranges over all environments.</p>
+<p>```cvl
+methods {
+  getFunds(address) returns uint256
+}</p>
+<p>invariant address<em>zero</em>cannot<em>become</em>an_account(env e)
+  getFunds(e, 0) == 0
+```</p>
+<h3><code>envfree</code> functions</h3>
+<p>When a function is not using the environment, it can be declared as <code>envfree</code> to omit the call’s <code>env</code> argument. For example, <code>getFunds</code> is not using any of the environment variables:</p>
+<p>```cvl
+methods {
+  getFunds(address) returns uint256 envfree
+}</p>
+<p>invariant address<em>zero</em>cannot<em>become</em>an_account()
+  getFunds(0) == 0
+```</p>
+<p>(user-guide-output)=</p>
+<h2>Understanding the results of the Certora Prover</h2>
+<p>The Certora Prover produces a table with the verification results as a web
+page. For each rule, it either displays a thumbs-up if it formally proved the
+rule or displays an input that triggers a violation of the rule. For example,
+below is a violation of the rule <code>others_can_only_increase</code> when simulated on
+the transfer function. A call trace demonstrating the violation is shown. It
+shows the arguments passed to each simulated function and the resulting return
+value (displayed after the slash). This example shows that a transfer of an
+amount close to <code>MAX_INT</code> causes the balance of the recipient account to
+decrease.</p>
+<p><img alt="example output" src="output.png"/></p>
+</body></html>

@@ -1,0 +1,485 @@
+<p>(ghosts-doc)=</p>
+<h1>Ghosts</h1>
+<p>Ghosts are a way of defining additional variables for use during verification.
+These variables are often used to 
+- communicate information between {ref}<code>rules-main</code> and {ref}<code>hooks</code>.
+- define deterministic {ref}<code>function summaries &lt;function-summary&gt;</code>.</p>
+<p>Ghosts can be seen as an 'extension' to the state of the contracts under verification.
+This means that in case a call reverts, the ghost values will revert to their pre-state.
+Additionally, if an unresolved call is handled by a havoc, the ghost values will havoc as well.
+Ghosts are regarded as part of the state of the contracts, 
+and when calls are invoked with <code>at storageVar</code> statements (see {ref}<code>storage-type</code>),
+they are restored to their state as saved in <code>storageVar</code>.
+An exception to this rule are ghosts marked <em>persistent</em>.
+Persistent ghosts are <strong>never</strong> havoced, and <strong>never</strong> reverted.
+See {ref}<code>persistent-ghosts</code> below for more details and examples.</p>
+<p><code>{contents}
+</code></p>
+<h2>Syntax</h2>
+<p>The syntax for ghost declarations is given by the following <a href="ebnf-syntax">EBNF grammar</a>:</p>
+<p>```
+ghost ::= "ghost" type id                             (";" | "{" axioms "}")
+        | "ghost" id "(" cvl_types ")" "returns" type (";" | "{" axioms "}")</p>
+<p>persistent<em>ghost ::=  "persistent" "ghost" type id                             (";" | "{" axioms "}")
+                    | "persistent" "ghost" id "(" cvl</em>types ")" "returns" type (";" | "{" axioms "}")</p>
+<p>type ::= basic<em>type
+       | "mapping" "(" cvl</em>type "=&gt;" type ")"</p>
+<p>axiom ::= [ "init_state" ] "axiom" expression ";"
+```</p>
+<p>See {doc}<code>types</code> for the <code>type</code> and <code>cvl_type</code> productions, and {doc}<code>expr</code> for
+the <code>expression</code> syntax.</p>
+<p>(ghost-variables)=</p>
+<h2>Declaring ghost variables</h2>
+<p>Ghost variables must be declared at the top level of a specification file.
+A ghost variable declaration includes the keyword <code>ghost</code> followed by the type and name
+of the ghost variable.</p>
+<p>The type of a ghost variable may be either a <a href="types.md">CVL type</a> or a <code>mapping</code> type.
+Mapping types are similar to solidity mapping types.  They must have CVL types
+as keys, but may contain either CVL types or mapping types as values.</p>
+<p>For example, the following are valid ghost declarations:</p>
+<p><code>cvl
+ghost uint x;
+ghost mapping(address =&gt; mathint) balances;
+ghost mapping(uint =&gt; mapping(uint =&gt; mathint)) delegations;
+</code></p>
+<p>while the following are invalid:</p>
+<p><code>cvl
+ghost (uint, uint) x;                              // tuples are not CVL types
+ghost mapping(mapping(uint =&gt; uint) =&gt; address) y; // mappings cannot be keys
+</code></p>
+<ul>
+<li><p><a href="https://github.com/Certora/Examples/blob/14668d39a6ddc67af349bc5b82f73db73349ef18/CVLByExample/ERC20/certora/specs/ERC20.spec#L113">simple <code>ghost</code> variable example</a></p></li>
+<li><p>This example uses an <a href="https://github.com/Certora/Examples/blob/14668d39a6ddc67af349bc5b82f73db73349ef18/CVLByExample/ERC20/certora/specs/ERC20.spec#L114"><code>init_state</code> axiom</a></p></li>
+<li><p><a href="https://github.com/Certora/Examples/blob/14668d39a6ddc67af349bc5b82f73db73349ef18/CVLByExample/structs/BankAccounts/certora/specs/Bank.spec#L117"><code>ghost mapping</code> example</a></p></li>
+</ul>
+<p>(ghost-functions)=</p>
+<h2>Ghost Functions</h2>
+<p>CVL also has support for "ghost functions".  These serve a different purpose from ghost variables, although they can be
+used in similar ways.</p>
+<p>Ghost functions must be declared at the top level of a specification file.
+A ghost function declaration includes the keyword <code>ghost</code> followed by the name and signature of the ghost function.
+Ghost functions should be used either:
+- when there are no updates to the ghost as the deterministic behavior and axioms are the only properties of the ghost
+- when updating the ghost - more than one entry is updated and then the havoc assuming statement is used.</p>
+<ul>
+<li><a href="https://github.com/Certora/Examples/blob/14668d39a6ddc67af349bc5b82f73db73349ef18/CVLByExample/QuantifierExamples/DoublyLinkedList/certora/spec/dll-linkedcorrectly.spec#L24"><code>ghost</code> function example</a></li>
+</ul>
+<h2>Restrictions on ghost definitions</h2>
+<ul>
+<li>A user-defined type, such as struct, array or interface is not allowed as the key or the output type of a <code>ghost mapping</code>.</li>
+</ul>
+<h2>Using ghost variables</h2>
+<p>While verifying a rule or invariant, the Prover considers every possible
+initial value of a ghost variable (subject to its {ref}<code>ghost-axioms</code>,
+see below).</p>
+<p>Within CVL, you can read or write ghosts using the normal variable syntax.  For
+example:</p>
+<p>```cvl
+ghost mapping(address =&gt; mathint) balances;</p>
+<p>function example(address user) {
+    balances[user] = x;
+}
+```</p>
+<p>The most common reason to use a ghost is to communicate information from a hook
+back to the rule that triggered it.  For example, the following CVL checks
+that a call to the contract method <code>do_update(user)</code> changes the contract
+variable <code>userInfo[user]</code> and does not change <code>userInfo[other]</code> for any other
+user:</p>
+<p>```cvl
+ghost mapping(address =&gt; bool) updated;</p>
+<p>hook Sstore userInfo[KEY address u] uint i {
+    updated[u] = true;
+}</p>
+<p>rule update<em>changes</em>user(address user) {
+    updated[user] = false;</p>
+<pre><code>do_update(user);
+
+assert updated[user] == true, "do_update(user) should affect user";
+</code></pre>
+<p>}</p>
+<p>rule update<em>changes</em>no_other(address user, address other) {
+    require user != other;
+    require updated[other] == false;</p>
+<pre><code>do_update(user);
+
+assert updated[other] == false;
+</code></pre>
+<p>}
+```</p>
+<p>Here the <code>updated</code> ghost is used to communicate information from the <code>userInfo</code>
+hook back to the <code>updated_changes_user</code> and <code>updated_changes_no_other</code> rules.</p>
+<p>(ghost-axioms)=</p>
+<h2>Ghost axioms</h2>
+<p>Ghost axioms are properties that the Prover assumes whenever it makes use of a ghost.</p>
+<p>(global-axioms)=</p>
+<h3>Global axioms</h3>
+<p>Sometimes we might want to constrain the behavior of a ghost in some particular way. 
+In CVL this is achieved by writing axioms. Axioms are simply CVL expressions that the tool will then assume are true 
+about the ghost. For example:</p>
+<p><code>cvl
+ghost bar(uint256) returns uint256 {
+    axiom forall uint256 x. bar(x) &gt; 10;
+}
+</code></p>
+<p>In any rule that uses bar, no application of bar could ever evaluate to a number less than or equal to 10. </p>
+<ul>
+<li><a href="https://github.com/Certora/Examples/blob/14668d39a6ddc67af349bc5b82f73db73349ef18/CVLByExample/structs/BankAccounts/certora/specs/Bank.spec#L119"><code>axiom</code> example</a></li>
+</ul>
+<h3>Initial state axioms</h3>
+<p>When writing invariants, initial axioms are a way to express the “constructor state” of a ghost function. They are used 
+only when checking the base step of invariants {ref}<code>invariant-as-rule</code>. Before checking the initial state of an invariant, the Certora Prover adds a <code>require</code> for each <code>init_state</code> axiom. <code>init_state</code> axioms are not used in rules or the preservation check for invariants.</p>
+<p><code>cvl
+ghost mathint sumBalances{
+    // assuming value zero at the initial state before constructor
+    init_state axiom sumBalances == 0;
+}
+</code></p>
+<ul>
+<li><a href="https://github.com/Certora/Examples/blob/14668d39a6ddc67af349bc5b82f73db73349ef18/CVLByExample/ConstantProductPool/certora/spec/ConstantProductPool.spec#L207">initial state axiom example</a></li>
+</ul>
+<h2>Restrictions on ghost axioms</h2>
+<ul>
+<li>A ghost axiom cannot refer to Solidity or CVL functions or to other ghosts. It can refer to the ghost itself.</li>
+<li>Since the signature of a ghost contains just parameter types without names, it cannot refer to its parameters. 
+<code>forall</code> can be used in order to refer the storage referred to by the parameters. <a href="https://github.com/Certora/Examples/blob/61ac29b1128c68aff7e8d1e77bc80bfcbd3528d6/CVLByExample/summary/ghost-summary/ghost-mapping/certora/specs/WithGhostSummary.spec#L12">Example</a>.</li>
+</ul>
+<p>(persistent-ghosts)=</p>
+<h2>Ghosts vs. persistent ghosts</h2>
+<p>A <code>persistent ghost</code> is a <code>ghost</code> that will never be {ref}<code>havoc &lt;glossary&gt;</code>. The value of a non-persistent <code>ghost</code> will be <code>havoc'ed</code> when the Prover <code>havoc</code>s the storage, a <code>persistent ghost</code> however will keep its value when storage is havoced.</p>
+<p>In most cases, non-persistent ghosts are the natural choice for a specification 
+that requires extra tracking of information.</p>
+<p>We present two examples where persistent ghosts are useful.</p>
+<h3>Persistent ghosts that survive havocs</h3>
+<p>In the first example, we want to track the occurrence of a potential reentrant call[^reentrancy]:</p>
+<p>```cvl
+persistent ghost bool reentrancy<em>happened {
+    init</em>state axiom !reentrancy_happened;
+}</p>
+<p>hook CALL(uint g, address addr, uint value, uint argsOffset, uint argsLength, 
+          uint retOffset, uint retLength) uint rc {
+    if (addr == currentContract) {
+        reentrancy<em>happened = reentrancy</em>happened 
+                                || executingContract == currentContract;
+    }
+}</p>
+<p>invariant no<em>reentrant</em>calls !reentrancy_happened;
+```</p>
+<p>To see why a persistent ghost must be used here for the variable <code>reentrancy_happened</code>, consider the following contract:
+<code>solidity
+contract NotReentrant {
+    function transfer1Token(IERC20 a) external {
+        require (address(a) != address(this));
+        a.transfer(msg.sender, 1);
+    }
+}
+</code></p>
+<p>If we do not apply any linking or dispatching for the call done on the target <code>a</code>, the call to <code>transfer</code> would havoc.
+During a havoc operation, the Prover conservatively assumes that almost any possible behavior can occur.
+In particular, it must assume that during the execution of the <code>a.transfer</code> call, 
+non-persistent ghosts can be updated arbitrarily (e.g. by other contracts),
+and thus (assuming <code>reentrancy_happened</code> were not marked as persistent), 
+the Prover considers the case where <code>reentrancy_happened</code> is set to <code>true</code> due to the havoc.
+Thus, when the <code>CALL</code> hook executes immediately after, 
+it does so where the <code>reentrancy_happened</code> value is already <code>true</code>, 
+and thus the value after the hook will remain <code>true</code>.</p>
+<p>In the lower-level view of the tool, the sequence of events is as follows:
+1. A call to <code>a.transfer</code> which cannot be resolved and results in a {ref}<code>havoc &lt;glossary&gt;</code> operation.
+Non-persistent ghosts are havoced, in particular <code>reentrancy_happened</code> if it were not marked as such.
+2. A <code>CALL</code> hook executes, updating <code>reentrancy_happened</code> based on its havoced value, meaning it can turn to true.</p>
+<p>Therefore even if the addresses of <code>a</code> and <code>NotReentrant</code> are distinct, we could still falsely detect a reentrant call as <code>reentrancy_happened</code> was set to true due to non-determinism.
+The call trace would show <code>reentrancy_happened</code> as being determined to be true due to a havoc in the "Ghosts State" view under "Global State".</p>
+<h3>Persistent ghosts that survive reverts</h3>
+<p>In this example, we use persistent ghosts to determine if a revert happened with user-provided data or not.
+This can help distinguishing between compiler-generated reverts and user-specified reverts (but only in <a href="https://soliditylang.org/blog/2020/10/28/solidity-0.8.x-preview/">Solidity versions prior to 0.8.x</a>).
+The idea is to set a ghost to true if a <code>REVERT</code> opcode is encountered with a positive buffer size. As in early Solidity versions the panic errors would compile to reverts with empty buffers, as well as user-provided <code>require</code>s with no message specified. </p>
+<p>```cvl
+persistent ghost bool saw<em>user</em>defined<em>revert</em>msg;</p>
+<p>hook REVERT(uint offset, uint size) {
+    if (size &gt; 0) {
+        saw<em>user</em>defined<em>revert</em>msg = true;
+    }
+}</p>
+<p>rule mark<em>methods</em>that<em>have</em>user<em>defined</em>reverts(method f, env e, calldataarg args) {
+    require !saw<em>user</em>defined<em>revert</em>msg;</p>
+<pre><code>f@withrevert(e, args);
+
+satisfy saw_user_defined_revert_msg;
+</code></pre>
+<p>}
+```</p>
+<p>To see why a regular ghost cannot be used to implement this rule, let's consider the following trivial contract:
+```solidity
+contract Reverting {
+    function noUserDefinedRevertFlows(uint a, uint b) external {
+        uint c = a/b; // will see a potential division-by-zero revert
+        uint[] memory arr = new uint<a href="1"></a>;
+        uint d = arr[a+b]; // will see a potential out-of-bounds access revert;
+    }</p>
+<pre><code>function userDefinedRequireMsg(uint a) external {
+    require(a != 0, "a != 0");
+}
+
+function emptyRequire(uint a) external {
+    require(a != 0);
+}
+</code></pre>
+<p>}
+```</p>
+<p>It is expected for the method <code>userDefinedRequireMsg</code> to satisfy the rule, 
+and it should be the only method to satisfy it.
+Assuming <code>saw_user_defined_revert_msg</code> was defined as a regular, non-persistent ghost, 
+the rule would not be satisfied for <code>userDefinedRequireMsg</code>: in case the input argument <code>a</code> is equal to 0,
+the contract reverts, and the value of <code>saw_user_defined_revert_msg</code> 
+is reset to its value before the call, which must be <code>false</code>
+(because the rule required it before the call).
+In this case, after the call <code>saw_user_defined_revert_msg</code> cannot be set to true and thus the <code>satisfy</code> fails.
+Applying the same reasoning, it is clear that the same behavior happens 
+for reverting behaviors of <code>noUserDefinedRevertFlows</code> and <code>emptyRequire</code>,
+which do not have user-defined revert messages. 
+This means that if <code>saw_user_defined_revert_msg</code> is not marked persistent, 
+the rule cannot distinguishing between methods that may revert with user-defined messages and methods that may not.</p>
+<html><head><meta content="https://github.com/Certora/Documentation/cvl/ghosts.md" name="source"/><meta content="https://github.com/Certora/Documentation/cvl/ghosts.md" name="url"/><meta content="Global axioms" name="title"/><meta content="(ghosts-doc)=
+Ghosts
+Ghosts are a way of defining additional variables for use during verification.
+These variables are often used to 
+- communicate information between {ref}rules-main and {ref}hooks." name="text"/></head><body><div style="background-color: #f0f0f0; padding: 10px; margin-bottom: 20px;">Source: https://github.com/Certora/Documentation/cvl/ghosts.md</div><p>(ghosts-doc)=</p>
+<h1>Ghosts</h1>
+<p>Ghosts are a way of defining additional variables for use during verification.
+These variables are often used to 
+- communicate information between {ref}<code>rules-main</code> and {ref}<code>hooks</code>.
+- define deterministic {ref}<code>function summaries &lt;function-summary&gt;</code>.</p>
+<p>Ghosts can be seen as an 'extension' to the state of the contracts under verification.
+This means that in case a call reverts, the ghost values will revert to their pre-state.
+Additionally, if an unresolved call is handled by a havoc, the ghost values will havoc as well.
+Ghosts are regarded as part of the state of the contracts, 
+and when calls are invoked with <code>at storageVar</code> statements (see {ref}<code>storage-type</code>),
+they are restored to their state as saved in <code>storageVar</code>.
+An exception to this rule are ghosts marked <em>persistent</em>.
+Persistent ghosts are <strong>never</strong> havoced, and <strong>never</strong> reverted.
+See {ref}<code>persistent-ghosts</code> below for more details and examples.</p>
+<p><code>{contents}
+</code></p>
+<h2>Syntax</h2>
+<p>The syntax for ghost declarations is given by the following <a href="ebnf-syntax">EBNF grammar</a>:</p>
+<p>```
+ghost ::= "ghost" type id                             (";" | "{" axioms "}")
+        | "ghost" id "(" cvl_types ")" "returns" type (";" | "{" axioms "}")</p>
+<p>persistent<em>ghost ::=  "persistent" "ghost" type id                             (";" | "{" axioms "}")
+                    | "persistent" "ghost" id "(" cvl</em>types ")" "returns" type (";" | "{" axioms "}")</p>
+<p>type ::= basic<em>type
+       | "mapping" "(" cvl</em>type "=&gt;" type ")"</p>
+<p>axiom ::= [ "init_state" ] "axiom" expression ";"
+```</p>
+<p>See {doc}<code>types</code> for the <code>type</code> and <code>cvl_type</code> productions, and {doc}<code>expr</code> for
+the <code>expression</code> syntax.</p>
+<p>(ghost-variables)=</p>
+<h2>Declaring ghost variables</h2>
+<p>Ghost variables must be declared at the top level of a specification file.
+A ghost variable declaration includes the keyword <code>ghost</code> followed by the type and name
+of the ghost variable.</p>
+<p>The type of a ghost variable may be either a <a href="types.md">CVL type</a> or a <code>mapping</code> type.
+Mapping types are similar to solidity mapping types.  They must have CVL types
+as keys, but may contain either CVL types or mapping types as values.</p>
+<p>For example, the following are valid ghost declarations:</p>
+<p><code>cvl
+ghost uint x;
+ghost mapping(address =&gt; mathint) balances;
+ghost mapping(uint =&gt; mapping(uint =&gt; mathint)) delegations;
+</code></p>
+<p>while the following are invalid:</p>
+<p><code>cvl
+ghost (uint, uint) x;                              // tuples are not CVL types
+ghost mapping(mapping(uint =&gt; uint) =&gt; address) y; // mappings cannot be keys
+</code></p>
+<ul>
+<li><p><a href="https://github.com/Certora/Examples/blob/14668d39a6ddc67af349bc5b82f73db73349ef18/CVLByExample/ERC20/certora/specs/ERC20.spec#L113">simple <code>ghost</code> variable example</a></p></li>
+<li><p>This example uses an <a href="https://github.com/Certora/Examples/blob/14668d39a6ddc67af349bc5b82f73db73349ef18/CVLByExample/ERC20/certora/specs/ERC20.spec#L114"><code>init_state</code> axiom</a></p></li>
+<li><p><a href="https://github.com/Certora/Examples/blob/14668d39a6ddc67af349bc5b82f73db73349ef18/CVLByExample/structs/BankAccounts/certora/specs/Bank.spec#L117"><code>ghost mapping</code> example</a></p></li>
+</ul>
+<p>(ghost-functions)=</p>
+<h2>Ghost Functions</h2>
+<p>CVL also has support for "ghost functions".  These serve a different purpose from ghost variables, although they can be
+used in similar ways.</p>
+<p>Ghost functions must be declared at the top level of a specification file.
+A ghost function declaration includes the keyword <code>ghost</code> followed by the name and signature of the ghost function.
+Ghost functions should be used either:
+- when there are no updates to the ghost as the deterministic behavior and axioms are the only properties of the ghost
+- when updating the ghost - more than one entry is updated and then the havoc assuming statement is used.</p>
+<ul>
+<li><a href="https://github.com/Certora/Examples/blob/14668d39a6ddc67af349bc5b82f73db73349ef18/CVLByExample/QuantifierExamples/DoublyLinkedList/certora/spec/dll-linkedcorrectly.spec#L24"><code>ghost</code> function example</a></li>
+</ul>
+<h2>Restrictions on ghost definitions</h2>
+<ul>
+<li>A user-defined type, such as struct, array or interface is not allowed as the key or the output type of a <code>ghost mapping</code>.</li>
+</ul>
+<h2>Using ghost variables</h2>
+<p>While verifying a rule or invariant, the Prover considers every possible
+initial value of a ghost variable (subject to its {ref}<code>ghost-axioms</code>,
+see below).</p>
+<p>Within CVL, you can read or write ghosts using the normal variable syntax.  For
+example:</p>
+<p>```cvl
+ghost mapping(address =&gt; mathint) balances;</p>
+<p>function example(address user) {
+    balances[user] = x;
+}
+```</p>
+<p>The most common reason to use a ghost is to communicate information from a hook
+back to the rule that triggered it.  For example, the following CVL checks
+that a call to the contract method <code>do_update(user)</code> changes the contract
+variable <code>userInfo[user]</code> and does not change <code>userInfo[other]</code> for any other
+user:</p>
+<p>```cvl
+ghost mapping(address =&gt; bool) updated;</p>
+<p>hook Sstore userInfo[KEY address u] uint i {
+    updated[u] = true;
+}</p>
+<p>rule update<em>changes</em>user(address user) {
+    updated[user] = false;</p>
+<pre><code>do_update(user);
+
+assert updated[user] == true, "do_update(user) should affect user";
+</code></pre>
+<p>}</p>
+<p>rule update<em>changes</em>no_other(address user, address other) {
+    require user != other;
+    require updated[other] == false;</p>
+<pre><code>do_update(user);
+
+assert updated[other] == false;
+</code></pre>
+<p>}
+```</p>
+<p>Here the <code>updated</code> ghost is used to communicate information from the <code>userInfo</code>
+hook back to the <code>updated_changes_user</code> and <code>updated_changes_no_other</code> rules.</p>
+<p>(ghost-axioms)=</p>
+<h2>Ghost axioms</h2>
+<p>Ghost axioms are properties that the Prover assumes whenever it makes use of a ghost.</p>
+<p>(global-axioms)=</p>
+<h3>Global axioms</h3>
+<p>Sometimes we might want to constrain the behavior of a ghost in some particular way. 
+In CVL this is achieved by writing axioms. Axioms are simply CVL expressions that the tool will then assume are true 
+about the ghost. For example:</p>
+<p><code>cvl
+ghost bar(uint256) returns uint256 {
+    axiom forall uint256 x. bar(x) &gt; 10;
+}
+</code></p>
+<p>In any rule that uses bar, no application of bar could ever evaluate to a number less than or equal to 10. </p>
+<ul>
+<li><a href="https://github.com/Certora/Examples/blob/14668d39a6ddc67af349bc5b82f73db73349ef18/CVLByExample/structs/BankAccounts/certora/specs/Bank.spec#L119"><code>axiom</code> example</a></li>
+</ul>
+<h3>Initial state axioms</h3>
+<p>When writing invariants, initial axioms are a way to express the “constructor state” of a ghost function. They are used 
+only when checking the base step of invariants {ref}<code>invariant-as-rule</code>. Before checking the initial state of an invariant, the Certora Prover adds a <code>require</code> for each <code>init_state</code> axiom. <code>init_state</code> axioms are not used in rules or the preservation check for invariants.</p>
+<p><code>cvl
+ghost mathint sumBalances{
+    // assuming value zero at the initial state before constructor
+    init_state axiom sumBalances == 0;
+}
+</code></p>
+<ul>
+<li><a href="https://github.com/Certora/Examples/blob/14668d39a6ddc67af349bc5b82f73db73349ef18/CVLByExample/ConstantProductPool/certora/spec/ConstantProductPool.spec#L207">initial state axiom example</a></li>
+</ul>
+<h2>Restrictions on ghost axioms</h2>
+<ul>
+<li>A ghost axiom cannot refer to Solidity or CVL functions or to other ghosts. It can refer to the ghost itself.</li>
+<li>Since the signature of a ghost contains just parameter types without names, it cannot refer to its parameters. 
+<code>forall</code> can be used in order to refer the storage referred to by the parameters. <a href="https://github.com/Certora/Examples/blob/61ac29b1128c68aff7e8d1e77bc80bfcbd3528d6/CVLByExample/summary/ghost-summary/ghost-mapping/certora/specs/WithGhostSummary.spec#L12">Example</a>.</li>
+</ul>
+<p>(persistent-ghosts)=</p>
+<h2>Ghosts vs. persistent ghosts</h2>
+<p>A <code>persistent ghost</code> is a <code>ghost</code> that will never be {ref}<code>havoc &lt;glossary&gt;</code>. The value of a non-persistent <code>ghost</code> will be <code>havoc'ed</code> when the Prover <code>havoc</code>s the storage, a <code>persistent ghost</code> however will keep its value when storage is havoced.</p>
+<p>In most cases, non-persistent ghosts are the natural choice for a specification 
+that requires extra tracking of information.</p>
+<p>We present two examples where persistent ghosts are useful.</p>
+<h3>Persistent ghosts that survive havocs</h3>
+<p>In the first example, we want to track the occurrence of a potential reentrant call[^reentrancy]:</p>
+<p>```cvl
+persistent ghost bool reentrancy<em>happened {
+    init</em>state axiom !reentrancy_happened;
+}</p>
+<p>hook CALL(uint g, address addr, uint value, uint argsOffset, uint argsLength, 
+          uint retOffset, uint retLength) uint rc {
+    if (addr == currentContract) {
+        reentrancy<em>happened = reentrancy</em>happened 
+                                || executingContract == currentContract;
+    }
+}</p>
+<p>invariant no<em>reentrant</em>calls !reentrancy_happened;
+```</p>
+<p>To see why a persistent ghost must be used here for the variable <code>reentrancy_happened</code>, consider the following contract:
+<code>solidity
+contract NotReentrant {
+    function transfer1Token(IERC20 a) external {
+        require (address(a) != address(this));
+        a.transfer(msg.sender, 1);
+    }
+}
+</code></p>
+<p>If we do not apply any linking or dispatching for the call done on the target <code>a</code>, the call to <code>transfer</code> would havoc.
+During a havoc operation, the Prover conservatively assumes that almost any possible behavior can occur.
+In particular, it must assume that during the execution of the <code>a.transfer</code> call, 
+non-persistent ghosts can be updated arbitrarily (e.g. by other contracts),
+and thus (assuming <code>reentrancy_happened</code> were not marked as persistent), 
+the Prover considers the case where <code>reentrancy_happened</code> is set to <code>true</code> due to the havoc.
+Thus, when the <code>CALL</code> hook executes immediately after, 
+it does so where the <code>reentrancy_happened</code> value is already <code>true</code>, 
+and thus the value after the hook will remain <code>true</code>.</p>
+<p>In the lower-level view of the tool, the sequence of events is as follows:
+1. A call to <code>a.transfer</code> which cannot be resolved and results in a {ref}<code>havoc &lt;glossary&gt;</code> operation.
+Non-persistent ghosts are havoced, in particular <code>reentrancy_happened</code> if it were not marked as such.
+2. A <code>CALL</code> hook executes, updating <code>reentrancy_happened</code> based on its havoced value, meaning it can turn to true.</p>
+<p>Therefore even if the addresses of <code>a</code> and <code>NotReentrant</code> are distinct, we could still falsely detect a reentrant call as <code>reentrancy_happened</code> was set to true due to non-determinism.
+The call trace would show <code>reentrancy_happened</code> as being determined to be true due to a havoc in the "Ghosts State" view under "Global State".</p>
+<h3>Persistent ghosts that survive reverts</h3>
+<p>In this example, we use persistent ghosts to determine if a revert happened with user-provided data or not.
+This can help distinguishing between compiler-generated reverts and user-specified reverts (but only in <a href="https://soliditylang.org/blog/2020/10/28/solidity-0.8.x-preview/">Solidity versions prior to 0.8.x</a>).
+The idea is to set a ghost to true if a <code>REVERT</code> opcode is encountered with a positive buffer size. As in early Solidity versions the panic errors would compile to reverts with empty buffers, as well as user-provided <code>require</code>s with no message specified. </p>
+<p>```cvl
+persistent ghost bool saw<em>user</em>defined<em>revert</em>msg;</p>
+<p>hook REVERT(uint offset, uint size) {
+    if (size &gt; 0) {
+        saw<em>user</em>defined<em>revert</em>msg = true;
+    }
+}</p>
+<p>rule mark<em>methods</em>that<em>have</em>user<em>defined</em>reverts(method f, env e, calldataarg args) {
+    require !saw<em>user</em>defined<em>revert</em>msg;</p>
+<pre><code>f@withrevert(e, args);
+
+satisfy saw_user_defined_revert_msg;
+</code></pre>
+<p>}
+```</p>
+<p>To see why a regular ghost cannot be used to implement this rule, let's consider the following trivial contract:
+```solidity
+contract Reverting {
+    function noUserDefinedRevertFlows(uint a, uint b) external {
+        uint c = a/b; // will see a potential division-by-zero revert
+        uint[] memory arr = new uint<a href="1"></a>;
+        uint d = arr[a+b]; // will see a potential out-of-bounds access revert;
+    }</p>
+<pre><code>function userDefinedRequireMsg(uint a) external {
+    require(a != 0, "a != 0");
+}
+
+function emptyRequire(uint a) external {
+    require(a != 0);
+}
+</code></pre>
+<p>}
+```</p>
+<p>It is expected for the method <code>userDefinedRequireMsg</code> to satisfy the rule, 
+and it should be the only method to satisfy it.
+Assuming <code>saw_user_defined_revert_msg</code> was defined as a regular, non-persistent ghost, 
+the rule would not be satisfied for <code>userDefinedRequireMsg</code>: in case the input argument <code>a</code> is equal to 0,
+the contract reverts, and the value of <code>saw_user_defined_revert_msg</code> 
+is reset to its value before the call, which must be <code>false</code>
+(because the rule required it before the call).
+In this case, after the call <code>saw_user_defined_revert_msg</code> cannot be set to true and thus the <code>satisfy</code> fails.
+Applying the same reasoning, it is clear that the same behavior happens 
+for reverting behaviors of <code>noUserDefinedRevertFlows</code> and <code>emptyRequire</code>,
+which do not have user-defined revert messages. 
+This means that if <code>saw_user_defined_revert_msg</code> is not marked persistent, 
+the rule cannot distinguishing between methods that may revert with user-defined messages and methods that may not.</p>
+</body></html>

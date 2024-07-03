@@ -1,0 +1,939 @@
+<p>(timeouts-introduction)=</p>
+<h1>Timeouts</h1>
+<p>In the following, we will give a basic classification of timeouts, explain some
+candidate causes for timeouts, and show ways to sometimes prevent them. See
+{ref}<code>timeouts-background</code> for a glimpse into some of the theoretical background
+on verification timeouts.</p>
+<p>(timeouts-classification)=</p>
+<h2>Classification of Timeouts</h2>
+<p>For a first classification of timeouts in Certora Prover, we consider on where
+in the Prover's pipeline they occur. The pipeline starts by compiling a CVL rule
+and the linked EVM bytecode into an intermediate language (called {term}<code>TAC</code>).
+This is followed by many static analyses and program transformations.
+Afterwards, the TAC program is iteratively split into parts and translated into
+logical formulas. The logical formulas are then sent to an {term}<code>SMT</code> solver.
+For more details on how programs are split up see {ref}<code>control-flow-splitting</code>.
+ For a more comprehensive overview of the Certora Prover, see the
+{ref}<code>whitepaper-technical</code> section of the Certora Technology White Paper.</p>
+<p>We classify Certora Prover timeouts as follows:
+1.  timeouts that happen before SMT solvers are running 
+2.  timeouts where the SMT queries in sum lead to a global timeout
+3.  timeouts where a single SMT query could not be solved </p>
+<p>Types 1. and 2. are signified by a hard stop of the Prover. That means the
+Prover ran into the timeout of the cloud job, which is set at 2 hours, and was
+forcefully shut down from everything it was doing (it is possible to lower that
+timeout using the {ref}<code>--global_timeout</code> flag). A message like "hard stop
+reached" appears in the "Global problems" pane of the
+<a href="verification-report">report</a>, and error symbols next to one or many rules.</p>
+<p><code>{figure} hard-stop-in-report.png
+:name: hard stop in report
+:align: center
+:height: 130px
+A hard stop message appearing under Global Problems
+</code></p>
+<p>% TODO made CERT-3797 so we get a clear indication to the user, hopefully
+% then, CVT should indicate via report-logs
+%  - whether there was a hard stop
+%  - whether SMT has started</p>
+<p>Type 3. is signified by a soft stop. This means an SMT solver shut down due to
+hitting the limit for a single SMT run (set via {ref}<code>--smt_timeout</code>). </p>
+<p><code>{figure} rule-timeout-in-report.png
+:name: rule timeout in report
+:align: center
+:height: 200px
+A rule that timed out in the SMT solver
+</code></p>
+<p>In the remainder, we will focus on the mitigation of SMT timeouts, i.e., types
+2. and 3. Non-SMT Timeouts (Type 1.) should be reported to Certora. </p>
+<p>% TODO: we could suggest that the users try DELETE summaries for type 1, but 
+%  first I think we'd need some feedback from the tool, what would be good to
+%  delete (and also document DELETE summaries)</p>
+<p>(timeout_causes)=</p>
+<h2>Identifying timeout causes</h2>
+<p>As a first step towards resolving an SMT timeout, we need to diagnose its root
+causes. In our experience, the following are some of the most common reasons for
+SMT timeouts:</p>
+<ul>
+<li>non-trivial amount of nonlinear arithmetic</li>
+<li>very high path count</li>
+<li>high Storage/Memory complexity</li>
+</ul>
+<p>The term {term}<code>nonlinear arithmetic</code> refers to computations involving
+multiplications or divisions of variables. These are notoriously hard for
+solvers. The path count is the number of paths from initial location to final
+location in the  rule's {term}<code>control flow graph</code>. In the worst case, this
+leads to a very high number of sub-cases that the solver needs to consider.
+Furthermore, a high number of updates to Storage or Memory can be challenging
+for the solver, because it needs to reason about
+<a href="https://en.wikipedia.org/wiki/Aliasing_(computing)">aliasing</a> of Storage/Memory
+locations.</p>
+<p>This list is not exhaustive, but the majority of timeouts we have observed so
+far can be traced back to one or more of these causes. While these are not the
+only sources of complexity, they provide a good idea of the probable causes for
+a given timeout. </p>
+<h3>Complexity feedback from Certora Prover</h3>
+<p>Certora Prover provides help with diagnosing timeouts. We present these features
+in this section.</p>
+<h4>Difficulty statistics</h4>
+<p>Certora Prover provides statistics on the problem sizes it encounters. These
+statistics are available in the {ref}<code>tac-reports</code> that are generated in case of
+an SMT timeout. The statistics are structured according to the timeout reasons
+given above.</p>
+<p>%TODO: once stats are available in the html reports, mention it here</p>
+<p>Currently, the Prover tracks the following statistics:
+ - nonlinear operations count
+ - path count
+ - memory/storage complexity measures</p>
+<p>For a very short summary we give one summarizing number for each of the
+statistics, along with a LOW/MEDIUM/HIGH statement. </p>
+<p>%This occurs as an INFO
+% message in the Global Problems pane of the Prover reports.</p>
+<p>The meanings of the LOW/MEDIUM/HIGH classifications are as follows:
+ - LOW: unlikely to be a reason for a timeout
+ - MEDIUM: might be a reason for a timeout; the timeout might also be a result
+   of the combined complexity with other measures
+ - HIGH: likely to be a reason for a timeout, even if it is the only aspect of
+   the verification problem that shows high complexity</p>
+<p>% These categories map to intervals as follows (for the memory/storage complexity, 
+% we are still collecting data).</p>
+<p>%|    | LOW | MEDIUM | HIGH |
+%|----|-----|--------|------|
+%| Path count | 0 to 2<sup>20</sup> | 20<sup>20</sup> to 2<sup>80</sup> | &gt; 2<sup>80</sup> |
+%| Nonlinear operations | 0 to 10 | 10 to 30 | &gt; 30 |
+% TODO: memory/storage complexity, once we have a feeling for that</p>
+<p>For more details on the individual statistics and how to make use of them, also
+see the section on {ref}<code>dealing-with-complexity</code> below.</p>
+<p>(timeout-tac-reports)=</p>
+<h4>Timeout TAC reports</h4>
+<p>For each verification item, there is a TAC graph linked in the verification
+report. In case of a timeout this graph contains information on which parts of
+the program were part of the actual timeout, and which were already solved
+successfully. It also contains statistics on the above-described timeout causes.</p>
+<p>% Find more documentation on TAC reports in general <a href="tac-reports">here</a>.</p>
+<p>In the timeout case, the TAC reports contain some additional information that
+should help with diagnosing the timeout.</p>
+<h4>Finding timeout causes through modularization</h4>
+<p>In addition to the other techniques described here, it can be insightful to
+remove parts of the code in order to isolate the timeout reason. If timeouts are
+eliminated through this, modular verification techniques can be employed in 
+order to prove correctness of the parts separately.
+These techniques are a relatively blunt instrument, but can be necessary in 
+particular with large or complex code bases.</p>
+<h5>Sanity rules</h5>
+<p>One way of isolating the timeout cause is by running with a trivial
+specification.  This way, the specification is ruled out as the source of
+complexity. Thus, a timeout on such a rule hints towards some parts of the
+program code being challenging for the solver, rather than the program code in
+combination with another, less trivial, spec.</p>
+<p>Sanity rules are such trivial specifications. For documentation on them, see
+{ref}<code>sanity &lt;built-in-sanity&gt;</code> and {ref}<code>deep sanity &lt;built-in-deep-sanity&gt;</code>. </p>
+<p>(timeout-causes-library-contracts)=</p>
+<h5>Library contracts</h5>
+<p>Some systems are based on multiple library contracts which implement the
+business logic. They also forward storage updates to a single external contract
+holding the storage.</p>
+<p>In these systems, it can be appropriate to verify each library independently.</p>
+<p>If you encounter timeouts when trying to verify the main entry point contract to
+the system, check the impact of the libraries on the verification by summarizing
+all external library (delegate) calls as <code>NONDET</code>, using the option
+<code>-summarizeExtLibraryCallsAsNonDetPreLinking</code> as follows:</p>
+<p><code>sh
+certoraRun ... --prover_args '-summarizeExtLibraryCallsAsNonDetPreLinking true'
+</code></p>
+<p><code>{note}
+This option is only applied for `delegatecall`s and _external_ library calls.
+Internal calls are automatically inlined by the Solidity compiler and are 
+subject to summarizations specified in the spec file's `methods` block.
+</code></p>
+<p>(timeout-prevention)=</p>
+<h2>Timeout prevention</h2>
+<p>Timeout prevention approaches fall into these categories.
+1. changing tool settings
+2. changing specs
+3. changing source code</p>
+<p>Changing tool settings is least invasive and easy to do, thus it is usually
+preferable to the other options. However, there are cases when parts of the
+input code that are very hard to reason about need to be worked around.
+Sometimes a combination of approaches is needed to resolve a timeout.</p>
+<p>In the following we will discuss some concrete approaches to timeout prevention.
+This collection will be extended over time based on user's experiences and tool
+improvements.</p>
+<p><code>{note}
+The old documentation has a section on
+{doc}`troubleshooting &lt;/docs/confluence/perplexed&gt;` that addresses timeouts, 
+which might complement the information given here.  
+There is also some helpful information in the section on
+{ref}`summarization &lt;old-summary-example&gt;`.
+Some of the information in these references is out of date.
+</code></p>
+<p>(timeout-single-rule)=</p>
+<h3>Running rules individually</h3>
+<p>The Certora Prover works on the rules of the specification in parallel.
+Even if no rule is very expensive on its own, working on all of them in parallel
+can add up quickly and thereby exceed the timeout.
+Try running individual rules only via the {ref}<code>--rule</code> option, or split the
+specification into separate files. Keep in mind that a {term}<code>parametric rule</code>,
+as well as an {term}<code>invariant</code>, spawns a sub-rule for every contract method.
+This can further be reduced via the {ref}<code>--method</code> option.</p>
+<p>(detect-candidates-for-summarization)=</p>
+<h3>Detect candidates for summarization</h3>
+<p>In a large codebase it can be hard to find all the functions that may be difficult for the Prover.
+A traditional approach would be to run a simple parametric rule to explore all functions in the 
+relevant contracts, and studying resulting potential timeouts. 
+However such an approach prolongs the feedback loop of working with the Prover.</p>
+<p>As an alternative approach, the Prover supports an {term}<code>overapproximating &lt;overapproximation&gt;</code> <em>auto-summarization</em> mode.
+It is based on the idea that internal <code>view</code> or <code>pure</code> functions (in Solidity) that are analyzed
+and found to be heuristically difficult for the Prover can be automatically summarized as <code>NONDET</code>, 
+resulting in two positive outcomes:
+1. The run is faster since complex code is summarized early in the Prover's pipeline.
+2. The Prover emits the list of <em>new</em> summaries (i.e., for functions that were not summarized already in the given specification) 
+it auto-generated, so that the user can then adapt the list
+and make the user-specified summaries more precise, or remove them altogether if the user wishes so.</p>
+<p>The Prover will not auto-summarize methods that were already summarized by the user.</p>
+<p>To enable this mode, add {ref}<code>--nondet_difficult_funcs</code> to the <code>certoraRun</code> command.
+The minimal difficulty threshold used for the auto-summarization
+can be adjusted using {ref}<code>--nondet_minimal_difficulty</code>.</p>
+<h4>Example usage</h4>
+<p>Many DeFi protocols use the <code>openzeppelin</code> math libraries.
+One such library is <code>MathUpgradeable</code>, providing a <code>mulDiv</code> functionality:
+<code>function mulDiv(uint256 x, uint256 y, uint256 denominator) internal pure returns (uint256 result)</code>.
+The implementation is known to be difficult for the Prover due to 
+applying numerous multiplication, division and <code>mulmod</code> operations, 
+and thus is often summarized.</p>
+<p>However, it is sometimes easy to miss the library also contains a more generalized version
+of <code>mulDiv</code> that supports either rounding-up or rounding down:
+<code>function mulDiv(uint256 x, uint256 y, uint256 denominator, Rounding rounding) internal pure returns (uint256)</code>.
+Sometimes it can be beneficial to summarize the generalized function as well. 
+The auto-summarization will highlight the generalized function in its output:
+<img alt="auto-summarizer-output-example" src="auto-summarizer-output-example.png"/>
+The contents can be copy-pasted into the <code>methods</code> block directly for future runs.</p>
+<p>The "Contracts Call Resolutions" tab and the "Rule Call Resolution" bar also show
+the instrumented auto-summaries, and distinguishes between them and user-defined summaries.</p>
+<p>(dealing-with-complexity)=</p>
+<h3>Dealing with different kinds of complexity</h3>
+<p>% screenshots in this subsection are taken from this run:
+% https://vaas-stg.certora.com/output/80942/9101c7e51a27456eb51bd9d088949c92?anonymousKey=25cca030b7594b795d994e937b5a027812d9406d
+% and from the (usual) delvtech/element example</p>
+<p>In this section we list some hints for timeout prevention based on which of the
+statistics (path count, number of nonlinear operations, memory/storage 
+complexity) is showing high severity on a given rule.</p>
+<p><code>{note}
+The techniques described further down under [modular verification](modular-verification) 
+are worth considering no matter which statistic is showing high severity.
+</code></p>
+<p>(high-path-count)=</p>
+<h4>Dealing with a high path count</h4>
+<p>The number of control flow paths is a major indication of how difficult a rule
+is to solve. Intuitively, in order to obtain a correctness proof for the rule, 
+an argument for the correctness of each of its paths has to be found.</p>
+<p>The Certora Prover indicates the path count in the Live Statistics panel. 
+The path count is given once for the whole rule and, separately on a per-call 
+basis.
+The per-call path count always includes the paths of all deeper calls (the 
+same holds for the count of nonlinear operations of the call).</p>
+<p><code>{figure} path-count-stats.png
+:name: path-count-stats
+Global and per-call path counts are displayed in the Live Statistics panel for 
+each rule.
+</code></p>
+<h5>Path explosion</h5>
+<p>The number of paths that are given in the path count statistic might seem very high 
+to users. The essential reason for these high number is known as the 
+<a href="https://en.wikipedia.org/wiki/Path_explosion">path explosion problem</a>: The path count
+is usually exponential in the number of nodes and edges in the control flow graph.</p>
+<p>For some intuition on how this happens, see the following illustration. Whenever there 
+is a sequence of subgraphs that branch and then join again, the simplest variant of this
+being the diamond shapes in the picture, the path count of the whole graph is the product 
+of these subgraph's path counts. Thus it is typical for the path count of a control flow
+graph to grow exponentially in its number of nodes (or edges).</p>
+<p><code>{figure} path-diamonds.png
+:name: path diamonds
+:height: 400px
+Illustration of path explosion through a sequence of *n* "diamond" shapes in the control 
+flow graph. The shown control flow graph has 2&lt;sup&gt;n&lt;/sup&gt; paths.
+</code></p>
+<p>The path count statistic for a given rule is based on the control flow graph of
+the rule with all calls (and their calls and so forth) inlined. For example, if
+some method with 5 paths is called 10 times within the rule, its control flow
+graph will appear 10 times as a subgraph of the rule's control flow graph. If,
+for instance all these calls were made in sequence, and there was no further
+branching in the rule, the path count would be 5<sup>10</sup>. </p>
+<p>A particular potential cause for path explosion are {ref}<code>dispatcher</code>. How much a 
+<code>DISPATCHER</code> summary contributes to the path count depends on three factors:
+ - how many potential call targets there are (how many known implementations)
+ - how often the summarized function is called
+ - whether the function is called in sequence or in parallel in the control flow 
+   (generally control flow branchings in sequence lead to an exponential path explosion)</p>
+<h5>Mitigation approaches</h5>
+<p>In order to reduce the path count of a rule, the usual modularization techniques,
+like method summarization, can be applied. (See also the section 
+{ref}<code>modular-verification</code> below.)</p>
+<p>As pointed out in the previous sub-section, <code>DISPATCHER</code> summaries can lead to a path 
+explosion, so replacing them for instance with <code>AUTO</code> summaries can have a significant 
+impact. (See also {ref}<code>auto-summary</code>.)</p>
+<p>Furthermore, it can help to change the parameters of the <em>control flow
+splitting</em> feature of the Certora Prover. Control flow splitting is a natural
+area to consider when the path count of a rule is high. When applying this
+technique, the Certora Prover internally divides each verification condition
+into smaller subproblems and attempts to solve them separately. For a more
+detailed explanation, see {ref}<code>control-flow-splitting</code>.</p>
+<p>We list a few option combinations that can help in various settings. There is a
+tradeoff between spending time in different places: The Prover can either try to
+spend much time at a low splitting level in the hope that no further splitting
+will be needed, or it can split quickly in the hope that the subproblems will be
+much easier to solve. </p>
+<p>The options on control flow splitting are described in more detail in the
+<a href="control-flow-splitting-options">corresponding section of the CLI
+documentation</a>. In the following, we list some
+brief examples how they can be used to avoid timeouts in certain scenarios.</p>
+<p>When the relevant source code is very large, the shallow splits have a chance of
+being too large for the solvers, thus eager splitting might help:</p>
+<p><code>sh
+certoraRun ... --prover_args '-smt_initialSplitDepth 5 -depth 15'
+</code></p>
+<p>When there are very many subproblems that are of medium difficulty there is a
+chance that the Prover has to split too often (not being able to "close" any
+sub-splits). In that case, a lazier splitting strategy could help. We achieve lazier
+splitting by giving the solver more time to find a solution before we split a
+problem.</p>
+<p><code>sh
+certoraRun ... --prover_args '-mediumTimeout 30 -depth 5'
+</code></p>
+<p>It can also help to have splitting run in parallel (the splits are solved
+sequentially by default).</p>
+<p><code>sh
+certoraRun ... --prover_args '-splitParallel true'
+</code></p>
+<p>If the expectation is that the rule is violated (or not violated in case of a
+<code>satisfy</code>-style rule), the {ref}<code>-dontStopAtFirstSplitTimeout</code> option can prove
+useful.</p>
+<p><code>sh
+certoraRun ... --prover_args '-dontStopAtFirstSplitTimeout true -depth 15 -mediumTimeout 5' --smt_timeout 10
+</code></p>
+<p>(high-nonlinear-op-count)=</p>
+<h4>Dealing with nonlinear arithmetic</h4>
+<p>Nonlinear integer arithmetic is often the hardest part of the formulas that the
+Certora Prover is solving. </p>
+<p>The Certora Prover displays the absolute number of nonlinear operations, as well
+as their number per external call, in the Live Statistics panel. In the per-call
+display, there is a warning-sign next to the call when there is a non-trivial
+number of nonlinear operations in the call or its sub-call. Currently,
+everything above and including two nonlinear operations is marked in this way.</p>
+<p><code>{figure} nonlinear-ops-field.png
+:name: nonlinear ops field
+Field in the Live Statistics panel indicating the number of nonlinear operations 
+in the selected rule
+</code></p>
+<p><code>{note}
+Counting the number of nonlinear operations is a rather coarse
+statistic. There are formulas with 10 nonlinear operations that are out of reach
+of current SMT solvers, while in other cases formulas with 120 operations are
+solved. Nevertheless, reducing the number of nonlinear operations has often
+proven a successful measure in timeout prevention even if some remained.
+</code></p>
+<p>The main techniques in reducing these numbers are modularization and
+underapproximation. </p>
+<p>Modularization, typically by introducing method summaries, can help reduce the
+size of the rule, thus reducing the nonlinear operations. The per-call
+statistics in the Live Statistics panel (picture below) can help with
+identifying nonlinearity hot spots. Summarizing these hot spots in particular
+can help reduce the number of nonlinear operations, especially when a method is 
+called multiple times.</p>
+<p><code>{figure} nonlinear-ops-call.png
+:name: nonlinear-ops-call
+Entry in Live Statistics indicating how many nonlinear operations are made in a given 
+call, including its sub-calls
+</code></p>
+<p>In some rules it is feasible to only consider an underapproximation of the
+actual behavior by fixing some value that is used very often in nonlinear
+computations to a concrete value. A typical example would be the decimal digits
+in fixed decimal arithmetic -- having this unconstrained can increase
+nonlinearity in the rule massively, although only a small range of values is
+actually feasible. Of course, great care has to be taken in choosing these
+underapproximations, since they lead to missed bugs otherwise.</p>
+<p>A weaker form of underapproximation would be to introduce an extra requirement
+on the range of some variable that contributes to nonlinearity. For example for
+the number of decimals in a fixed decimal computation only values between 0 and
+256 make sense, and in practice values from an even smaller range are likely to
+be used. This measure will not change the values in the Live Statistics panel, 
+but it has prevented timeouts in some cases nonetheless.</p>
+<p>(high-memory-complexity)=</p>
+<h4>Dealing with high memory (or storage) complexity</h4>
+<p>The memory complexity of each rule or parametric rule is displayed in the Live
+Statistics panel in the Certora Prover reports. </p>
+<p>% if we would want to slim it down to graph size only, we could write this:
+% Memory complexity is measured by
+% the <em>number of updates</em> statistic. This statistic indicates how often an update
+% to memory is performed anywhere in the rule. Note that any form of memory, i.e.
+%  EVM memory, EVM storage, ghost variables, or ghost functions, is counted here.
+% This number gives rough estimate of how much work the SMT solvers have to do to
+% reason about (non-)aliasing of memory references.</p>
+<p>The Certora Prover performs a decompilation of bytecode in a way that all EVM
+primitives can ultimately be modeled as SMT constructs. This process introduces
+key-to-value mappings for EVM memory and EVM storage. Additionally the CVL
+specification may introduce ghost mappings. The Prover runs static analyses to
+reduce the load on these mappings by splitting them into smaller pieces,
+(smaller mappings or scalar variables), but this is not always possible and some
+mappings usually remain in the final SMT formula.</p>
+<p>Under this model, the "#total updates" is a measure of how many times we store
+into a key-value mapping such as memory, storage, or a ghost function. The
+"longest update sequence" statistic represents the length the longest sequence
+of updates (i.e. store operations) performed on one of the mappings. In both
+cases, a smaller number indicates a less difficult problem for the Prover to
+solve.</p>
+<p>% :align: center
+<code>{figure} memory-complexity-field.png
+:name: memory complexity field
+:height: 90px
+Entry in the Live Statistics panel indicating memory complexity
+</code></p>
+<p>In the following we consider common culprits for high memory complexity.</p>
+<h5>Passing complex structs</h5>
+<p>One common reason for high memory complexity are complex data structures that
+are passed from the specification to the program, or also inside the program.
+<code>struct</code> types that contain many dynamically-sized arrays are especially
+problematic. </p>
+<p>% TODO: which calls exactly? external calls? all of them?</p>
+<p>```cvl
+rule myRule() {
+    MyStruct x;
+    foo(x);</p>
+<p>}
+```</p>
+<p>```solidity
+struct MyStruct {
+    // several dynamically-sized arrays
+    bytes b;
+    string s;
+    uint[] u1;
+    uint8[] u2;
+}</p>
+<p>function foo(MyStruct x) public {
+    ...
+}
+```</p>
+<p>In this case, it can help to identify fields of the struct that are not relevant
+for the property of the program that is currently being reasoned about and
+comment out those fields. In our experience these fields exist relatively often
+especially in large structs. Naturally, the removal might be complicated by the
+fact that all usages of these fields also need some munging steps applied to
+them.</p>
+<h5>Memory and storage in inline assembly</h5>
+<p>The Certora Prover employs <a href="storage-and-memory-analysis">static analyses and
+simplifications</a> in order to make the reasoning
+about Storage and Memory easier for the SMT solvers. These static analyses are
+sometimes thrown off by unusual code patterns (most often produced when using
+inline assembly), which can make the SMT formulas too hard to solve. </p>
+<p>CVT reports these failures of Storage or Memory analysis in the Global Problems
+pane of the reports, along with pointers to the offending source code positions
+ (typically inline assembly containing <code>sstore</code>/<code>sload</code>/<code>mstore</code>/<code>mload</code>
+ operations). To resolve such failures, the relevant code parts need to be
+summarized or munged. (Naturally, the Certora developers are working make such
+failures less frequent as well.)</p>
+<p>(modular-verification)=</p>
+<h3>Modular verification</h3>
+<p>Often it is useful to break a complex problem into simpler subproblems; this
+process is called modularization. You can modularize a verification problem by
+first proving a property about a complex piece of code (such as a library or a
+method) and then using that property to summarize the complex code.  In the
+following we elaborate on modularization techniques that can help with timeout
+prevention.</p>
+<p>(library_timeouts)=</p>
+<h4>Library-based systems</h4>
+<p>As mentioned here <a href="timeout-causes-library-contracts">before</a>, systems with
+libraries are a natural candidate for modularization.</p>
+<p>Alternatively to using the <code>-summarizeExtLibraryCallsAsNonDetPreLinking true</code>
+option mentioned before, one can summarize all the methods of a single library
+using a {ref}<code>catch-all summary &lt;catch-all-entries&gt;</code>.  For example, to use a
+<code>NONDET</code> summary for all functions of <code>MyBigLibrary</code>, one could add the
+following:</p>
+<p><code>
+methods {
+    function MyBigLibrary._ external =&gt; NONDET;
+    function MyBigLibrary._ internal =&gt; NONDET;
+}
+</code></p>
+<p>The above snippet has the effect of summarizing as <code>NONDET</code> all external calls
+to the library and <em>internal</em> ones as well. Only <code>NONDET</code> and <code>HAVOC</code> summaries
+can be applied. 
+For more information on method summaries, see {ref}<code>summaries</code>.</p>
+<p>(timeout-cli-options)=</p>
+<h3>Command line options</h3>
+<p>There are a number of command line options that influence specific parts of the
+Prover's pipeline. While their default values generally yield the best results,
+changing them is known to improve running time in certain cases.</p>
+<h4><code>--prover_args '-calltraceFreeOpt true'</code></h4>
+<p>This option allows for some rather aggressive simplifications. However, it
+possibly breaks call trace generation.</p>
+<html><head><meta content="https://github.com/Certora/Documentation/user-guide/out-of-resources/timeout.md" name="source"/><meta content="https://github.com/Certora/Documentation/user-guide/out-of-resources/timeout.md" name="url"/><meta content="Timeouts" name="title"/><meta content="(timeouts-introduction)=
+Timeouts
+In the following, we will give a basic classification of timeouts, explain some
+candidate causes for timeouts, and show ways to sometimes prevent them. See
+{ref}timeo" name="text"/></head><body><div style="background-color: #f0f0f0; padding: 10px; margin-bottom: 20px;">Source: https://github.com/Certora/Documentation/user-guide/out-of-resources/timeout.md</div><p>(timeouts-introduction)=</p>
+<h1>Timeouts</h1>
+<p>In the following, we will give a basic classification of timeouts, explain some
+candidate causes for timeouts, and show ways to sometimes prevent them. See
+{ref}<code>timeouts-background</code> for a glimpse into some of the theoretical background
+on verification timeouts.</p>
+<p>(timeouts-classification)=</p>
+<h2>Classification of Timeouts</h2>
+<p>For a first classification of timeouts in Certora Prover, we consider on where
+in the Prover's pipeline they occur. The pipeline starts by compiling a CVL rule
+and the linked EVM bytecode into an intermediate language (called {term}<code>TAC</code>).
+This is followed by many static analyses and program transformations.
+Afterwards, the TAC program is iteratively split into parts and translated into
+logical formulas. The logical formulas are then sent to an {term}<code>SMT</code> solver.
+For more details on how programs are split up see {ref}<code>control-flow-splitting</code>.
+ For a more comprehensive overview of the Certora Prover, see the
+{ref}<code>whitepaper-technical</code> section of the Certora Technology White Paper.</p>
+<p>We classify Certora Prover timeouts as follows:
+1.  timeouts that happen before SMT solvers are running 
+2.  timeouts where the SMT queries in sum lead to a global timeout
+3.  timeouts where a single SMT query could not be solved </p>
+<p>Types 1. and 2. are signified by a hard stop of the Prover. That means the
+Prover ran into the timeout of the cloud job, which is set at 2 hours, and was
+forcefully shut down from everything it was doing (it is possible to lower that
+timeout using the {ref}<code>--global_timeout</code> flag). A message like "hard stop
+reached" appears in the "Global problems" pane of the
+<a href="verification-report">report</a>, and error symbols next to one or many rules.</p>
+<p><code>{figure} hard-stop-in-report.png
+:name: hard stop in report
+:align: center
+:height: 130px
+A hard stop message appearing under Global Problems
+</code></p>
+<p>% TODO made CERT-3797 so we get a clear indication to the user, hopefully
+% then, CVT should indicate via report-logs
+%  - whether there was a hard stop
+%  - whether SMT has started</p>
+<p>Type 3. is signified by a soft stop. This means an SMT solver shut down due to
+hitting the limit for a single SMT run (set via {ref}<code>--smt_timeout</code>). </p>
+<p><code>{figure} rule-timeout-in-report.png
+:name: rule timeout in report
+:align: center
+:height: 200px
+A rule that timed out in the SMT solver
+</code></p>
+<p>In the remainder, we will focus on the mitigation of SMT timeouts, i.e., types
+2. and 3. Non-SMT Timeouts (Type 1.) should be reported to Certora. </p>
+<p>% TODO: we could suggest that the users try DELETE summaries for type 1, but 
+%  first I think we'd need some feedback from the tool, what would be good to
+%  delete (and also document DELETE summaries)</p>
+<p>(timeout_causes)=</p>
+<h2>Identifying timeout causes</h2>
+<p>As a first step towards resolving an SMT timeout, we need to diagnose its root
+causes. In our experience, the following are some of the most common reasons for
+SMT timeouts:</p>
+<ul>
+<li>non-trivial amount of nonlinear arithmetic</li>
+<li>very high path count</li>
+<li>high Storage/Memory complexity</li>
+</ul>
+<p>The term {term}<code>nonlinear arithmetic</code> refers to computations involving
+multiplications or divisions of variables. These are notoriously hard for
+solvers. The path count is the number of paths from initial location to final
+location in the  rule's {term}<code>control flow graph</code>. In the worst case, this
+leads to a very high number of sub-cases that the solver needs to consider.
+Furthermore, a high number of updates to Storage or Memory can be challenging
+for the solver, because it needs to reason about
+<a href="https://en.wikipedia.org/wiki/Aliasing_(computing)">aliasing</a> of Storage/Memory
+locations.</p>
+<p>This list is not exhaustive, but the majority of timeouts we have observed so
+far can be traced back to one or more of these causes. While these are not the
+only sources of complexity, they provide a good idea of the probable causes for
+a given timeout. </p>
+<h3>Complexity feedback from Certora Prover</h3>
+<p>Certora Prover provides help with diagnosing timeouts. We present these features
+in this section.</p>
+<h4>Difficulty statistics</h4>
+<p>Certora Prover provides statistics on the problem sizes it encounters. These
+statistics are available in the {ref}<code>tac-reports</code> that are generated in case of
+an SMT timeout. The statistics are structured according to the timeout reasons
+given above.</p>
+<p>%TODO: once stats are available in the html reports, mention it here</p>
+<p>Currently, the Prover tracks the following statistics:
+ - nonlinear operations count
+ - path count
+ - memory/storage complexity measures</p>
+<p>For a very short summary we give one summarizing number for each of the
+statistics, along with a LOW/MEDIUM/HIGH statement. </p>
+<p>%This occurs as an INFO
+% message in the Global Problems pane of the Prover reports.</p>
+<p>The meanings of the LOW/MEDIUM/HIGH classifications are as follows:
+ - LOW: unlikely to be a reason for a timeout
+ - MEDIUM: might be a reason for a timeout; the timeout might also be a result
+   of the combined complexity with other measures
+ - HIGH: likely to be a reason for a timeout, even if it is the only aspect of
+   the verification problem that shows high complexity</p>
+<p>% These categories map to intervals as follows (for the memory/storage complexity, 
+% we are still collecting data).</p>
+<p>%|    | LOW | MEDIUM | HIGH |
+%|----|-----|--------|------|
+%| Path count | 0 to 2<sup>20</sup> | 20<sup>20</sup> to 2<sup>80</sup> | &gt; 2<sup>80</sup> |
+%| Nonlinear operations | 0 to 10 | 10 to 30 | &gt; 30 |
+% TODO: memory/storage complexity, once we have a feeling for that</p>
+<p>For more details on the individual statistics and how to make use of them, also
+see the section on {ref}<code>dealing-with-complexity</code> below.</p>
+<p>(timeout-tac-reports)=</p>
+<h4>Timeout TAC reports</h4>
+<p>For each verification item, there is a TAC graph linked in the verification
+report. In case of a timeout this graph contains information on which parts of
+the program were part of the actual timeout, and which were already solved
+successfully. It also contains statistics on the above-described timeout causes.</p>
+<p>% Find more documentation on TAC reports in general <a href="tac-reports">here</a>.</p>
+<p>In the timeout case, the TAC reports contain some additional information that
+should help with diagnosing the timeout.</p>
+<h4>Finding timeout causes through modularization</h4>
+<p>In addition to the other techniques described here, it can be insightful to
+remove parts of the code in order to isolate the timeout reason. If timeouts are
+eliminated through this, modular verification techniques can be employed in 
+order to prove correctness of the parts separately.
+These techniques are a relatively blunt instrument, but can be necessary in 
+particular with large or complex code bases.</p>
+<h5>Sanity rules</h5>
+<p>One way of isolating the timeout cause is by running with a trivial
+specification.  This way, the specification is ruled out as the source of
+complexity. Thus, a timeout on such a rule hints towards some parts of the
+program code being challenging for the solver, rather than the program code in
+combination with another, less trivial, spec.</p>
+<p>Sanity rules are such trivial specifications. For documentation on them, see
+{ref}<code>sanity &lt;built-in-sanity&gt;</code> and {ref}<code>deep sanity &lt;built-in-deep-sanity&gt;</code>. </p>
+<p>(timeout-causes-library-contracts)=</p>
+<h5>Library contracts</h5>
+<p>Some systems are based on multiple library contracts which implement the
+business logic. They also forward storage updates to a single external contract
+holding the storage.</p>
+<p>In these systems, it can be appropriate to verify each library independently.</p>
+<p>If you encounter timeouts when trying to verify the main entry point contract to
+the system, check the impact of the libraries on the verification by summarizing
+all external library (delegate) calls as <code>NONDET</code>, using the option
+<code>-summarizeExtLibraryCallsAsNonDetPreLinking</code> as follows:</p>
+<p><code>sh
+certoraRun ... --prover_args '-summarizeExtLibraryCallsAsNonDetPreLinking true'
+</code></p>
+<p><code>{note}
+This option is only applied for `delegatecall`s and _external_ library calls.
+Internal calls are automatically inlined by the Solidity compiler and are 
+subject to summarizations specified in the spec file's `methods` block.
+</code></p>
+<p>(timeout-prevention)=</p>
+<h2>Timeout prevention</h2>
+<p>Timeout prevention approaches fall into these categories.
+1. changing tool settings
+2. changing specs
+3. changing source code</p>
+<p>Changing tool settings is least invasive and easy to do, thus it is usually
+preferable to the other options. However, there are cases when parts of the
+input code that are very hard to reason about need to be worked around.
+Sometimes a combination of approaches is needed to resolve a timeout.</p>
+<p>In the following we will discuss some concrete approaches to timeout prevention.
+This collection will be extended over time based on user's experiences and tool
+improvements.</p>
+<p><code>{note}
+The old documentation has a section on
+{doc}`troubleshooting &lt;/docs/confluence/perplexed&gt;` that addresses timeouts, 
+which might complement the information given here.  
+There is also some helpful information in the section on
+{ref}`summarization &lt;old-summary-example&gt;`.
+Some of the information in these references is out of date.
+</code></p>
+<p>(timeout-single-rule)=</p>
+<h3>Running rules individually</h3>
+<p>The Certora Prover works on the rules of the specification in parallel.
+Even if no rule is very expensive on its own, working on all of them in parallel
+can add up quickly and thereby exceed the timeout.
+Try running individual rules only via the {ref}<code>--rule</code> option, or split the
+specification into separate files. Keep in mind that a {term}<code>parametric rule</code>,
+as well as an {term}<code>invariant</code>, spawns a sub-rule for every contract method.
+This can further be reduced via the {ref}<code>--method</code> option.</p>
+<p>(detect-candidates-for-summarization)=</p>
+<h3>Detect candidates for summarization</h3>
+<p>In a large codebase it can be hard to find all the functions that may be difficult for the Prover.
+A traditional approach would be to run a simple parametric rule to explore all functions in the 
+relevant contracts, and studying resulting potential timeouts. 
+However such an approach prolongs the feedback loop of working with the Prover.</p>
+<p>As an alternative approach, the Prover supports an {term}<code>overapproximating &lt;overapproximation&gt;</code> <em>auto-summarization</em> mode.
+It is based on the idea that internal <code>view</code> or <code>pure</code> functions (in Solidity) that are analyzed
+and found to be heuristically difficult for the Prover can be automatically summarized as <code>NONDET</code>, 
+resulting in two positive outcomes:
+1. The run is faster since complex code is summarized early in the Prover's pipeline.
+2. The Prover emits the list of <em>new</em> summaries (i.e., for functions that were not summarized already in the given specification) 
+it auto-generated, so that the user can then adapt the list
+and make the user-specified summaries more precise, or remove them altogether if the user wishes so.</p>
+<p>The Prover will not auto-summarize methods that were already summarized by the user.</p>
+<p>To enable this mode, add {ref}<code>--nondet_difficult_funcs</code> to the <code>certoraRun</code> command.
+The minimal difficulty threshold used for the auto-summarization
+can be adjusted using {ref}<code>--nondet_minimal_difficulty</code>.</p>
+<h4>Example usage</h4>
+<p>Many DeFi protocols use the <code>openzeppelin</code> math libraries.
+One such library is <code>MathUpgradeable</code>, providing a <code>mulDiv</code> functionality:
+<code>function mulDiv(uint256 x, uint256 y, uint256 denominator) internal pure returns (uint256 result)</code>.
+The implementation is known to be difficult for the Prover due to 
+applying numerous multiplication, division and <code>mulmod</code> operations, 
+and thus is often summarized.</p>
+<p>However, it is sometimes easy to miss the library also contains a more generalized version
+of <code>mulDiv</code> that supports either rounding-up or rounding down:
+<code>function mulDiv(uint256 x, uint256 y, uint256 denominator, Rounding rounding) internal pure returns (uint256)</code>.
+Sometimes it can be beneficial to summarize the generalized function as well. 
+The auto-summarization will highlight the generalized function in its output:
+<img alt="auto-summarizer-output-example" src="auto-summarizer-output-example.png"/>
+The contents can be copy-pasted into the <code>methods</code> block directly for future runs.</p>
+<p>The "Contracts Call Resolutions" tab and the "Rule Call Resolution" bar also show
+the instrumented auto-summaries, and distinguishes between them and user-defined summaries.</p>
+<p>(dealing-with-complexity)=</p>
+<h3>Dealing with different kinds of complexity</h3>
+<p>% screenshots in this subsection are taken from this run:
+% https://vaas-stg.certora.com/output/80942/9101c7e51a27456eb51bd9d088949c92?anonymousKey=25cca030b7594b795d994e937b5a027812d9406d
+% and from the (usual) delvtech/element example</p>
+<p>In this section we list some hints for timeout prevention based on which of the
+statistics (path count, number of nonlinear operations, memory/storage 
+complexity) is showing high severity on a given rule.</p>
+<p><code>{note}
+The techniques described further down under [modular verification](modular-verification) 
+are worth considering no matter which statistic is showing high severity.
+</code></p>
+<p>(high-path-count)=</p>
+<h4>Dealing with a high path count</h4>
+<p>The number of control flow paths is a major indication of how difficult a rule
+is to solve. Intuitively, in order to obtain a correctness proof for the rule, 
+an argument for the correctness of each of its paths has to be found.</p>
+<p>The Certora Prover indicates the path count in the Live Statistics panel. 
+The path count is given once for the whole rule and, separately on a per-call 
+basis.
+The per-call path count always includes the paths of all deeper calls (the 
+same holds for the count of nonlinear operations of the call).</p>
+<p><code>{figure} path-count-stats.png
+:name: path-count-stats
+Global and per-call path counts are displayed in the Live Statistics panel for 
+each rule.
+</code></p>
+<h5>Path explosion</h5>
+<p>The number of paths that are given in the path count statistic might seem very high 
+to users. The essential reason for these high number is known as the 
+<a href="https://en.wikipedia.org/wiki/Path_explosion">path explosion problem</a>: The path count
+is usually exponential in the number of nodes and edges in the control flow graph.</p>
+<p>For some intuition on how this happens, see the following illustration. Whenever there 
+is a sequence of subgraphs that branch and then join again, the simplest variant of this
+being the diamond shapes in the picture, the path count of the whole graph is the product 
+of these subgraph's path counts. Thus it is typical for the path count of a control flow
+graph to grow exponentially in its number of nodes (or edges).</p>
+<p><code>{figure} path-diamonds.png
+:name: path diamonds
+:height: 400px
+Illustration of path explosion through a sequence of *n* "diamond" shapes in the control 
+flow graph. The shown control flow graph has 2&lt;sup&gt;n&lt;/sup&gt; paths.
+</code></p>
+<p>The path count statistic for a given rule is based on the control flow graph of
+the rule with all calls (and their calls and so forth) inlined. For example, if
+some method with 5 paths is called 10 times within the rule, its control flow
+graph will appear 10 times as a subgraph of the rule's control flow graph. If,
+for instance all these calls were made in sequence, and there was no further
+branching in the rule, the path count would be 5<sup>10</sup>. </p>
+<p>A particular potential cause for path explosion are {ref}<code>dispatcher</code>. How much a 
+<code>DISPATCHER</code> summary contributes to the path count depends on three factors:
+ - how many potential call targets there are (how many known implementations)
+ - how often the summarized function is called
+ - whether the function is called in sequence or in parallel in the control flow 
+   (generally control flow branchings in sequence lead to an exponential path explosion)</p>
+<h5>Mitigation approaches</h5>
+<p>In order to reduce the path count of a rule, the usual modularization techniques,
+like method summarization, can be applied. (See also the section 
+{ref}<code>modular-verification</code> below.)</p>
+<p>As pointed out in the previous sub-section, <code>DISPATCHER</code> summaries can lead to a path 
+explosion, so replacing them for instance with <code>AUTO</code> summaries can have a significant 
+impact. (See also {ref}<code>auto-summary</code>.)</p>
+<p>Furthermore, it can help to change the parameters of the <em>control flow
+splitting</em> feature of the Certora Prover. Control flow splitting is a natural
+area to consider when the path count of a rule is high. When applying this
+technique, the Certora Prover internally divides each verification condition
+into smaller subproblems and attempts to solve them separately. For a more
+detailed explanation, see {ref}<code>control-flow-splitting</code>.</p>
+<p>We list a few option combinations that can help in various settings. There is a
+tradeoff between spending time in different places: The Prover can either try to
+spend much time at a low splitting level in the hope that no further splitting
+will be needed, or it can split quickly in the hope that the subproblems will be
+much easier to solve. </p>
+<p>The options on control flow splitting are described in more detail in the
+<a href="control-flow-splitting-options">corresponding section of the CLI
+documentation</a>. In the following, we list some
+brief examples how they can be used to avoid timeouts in certain scenarios.</p>
+<p>When the relevant source code is very large, the shallow splits have a chance of
+being too large for the solvers, thus eager splitting might help:</p>
+<p><code>sh
+certoraRun ... --prover_args '-smt_initialSplitDepth 5 -depth 15'
+</code></p>
+<p>When there are very many subproblems that are of medium difficulty there is a
+chance that the Prover has to split too often (not being able to "close" any
+sub-splits). In that case, a lazier splitting strategy could help. We achieve lazier
+splitting by giving the solver more time to find a solution before we split a
+problem.</p>
+<p><code>sh
+certoraRun ... --prover_args '-mediumTimeout 30 -depth 5'
+</code></p>
+<p>It can also help to have splitting run in parallel (the splits are solved
+sequentially by default).</p>
+<p><code>sh
+certoraRun ... --prover_args '-splitParallel true'
+</code></p>
+<p>If the expectation is that the rule is violated (or not violated in case of a
+<code>satisfy</code>-style rule), the {ref}<code>-dontStopAtFirstSplitTimeout</code> option can prove
+useful.</p>
+<p><code>sh
+certoraRun ... --prover_args '-dontStopAtFirstSplitTimeout true -depth 15 -mediumTimeout 5' --smt_timeout 10
+</code></p>
+<p>(high-nonlinear-op-count)=</p>
+<h4>Dealing with nonlinear arithmetic</h4>
+<p>Nonlinear integer arithmetic is often the hardest part of the formulas that the
+Certora Prover is solving. </p>
+<p>The Certora Prover displays the absolute number of nonlinear operations, as well
+as their number per external call, in the Live Statistics panel. In the per-call
+display, there is a warning-sign next to the call when there is a non-trivial
+number of nonlinear operations in the call or its sub-call. Currently,
+everything above and including two nonlinear operations is marked in this way.</p>
+<p><code>{figure} nonlinear-ops-field.png
+:name: nonlinear ops field
+Field in the Live Statistics panel indicating the number of nonlinear operations 
+in the selected rule
+</code></p>
+<p><code>{note}
+Counting the number of nonlinear operations is a rather coarse
+statistic. There are formulas with 10 nonlinear operations that are out of reach
+of current SMT solvers, while in other cases formulas with 120 operations are
+solved. Nevertheless, reducing the number of nonlinear operations has often
+proven a successful measure in timeout prevention even if some remained.
+</code></p>
+<p>The main techniques in reducing these numbers are modularization and
+underapproximation. </p>
+<p>Modularization, typically by introducing method summaries, can help reduce the
+size of the rule, thus reducing the nonlinear operations. The per-call
+statistics in the Live Statistics panel (picture below) can help with
+identifying nonlinearity hot spots. Summarizing these hot spots in particular
+can help reduce the number of nonlinear operations, especially when a method is 
+called multiple times.</p>
+<p><code>{figure} nonlinear-ops-call.png
+:name: nonlinear-ops-call
+Entry in Live Statistics indicating how many nonlinear operations are made in a given 
+call, including its sub-calls
+</code></p>
+<p>In some rules it is feasible to only consider an underapproximation of the
+actual behavior by fixing some value that is used very often in nonlinear
+computations to a concrete value. A typical example would be the decimal digits
+in fixed decimal arithmetic -- having this unconstrained can increase
+nonlinearity in the rule massively, although only a small range of values is
+actually feasible. Of course, great care has to be taken in choosing these
+underapproximations, since they lead to missed bugs otherwise.</p>
+<p>A weaker form of underapproximation would be to introduce an extra requirement
+on the range of some variable that contributes to nonlinearity. For example for
+the number of decimals in a fixed decimal computation only values between 0 and
+256 make sense, and in practice values from an even smaller range are likely to
+be used. This measure will not change the values in the Live Statistics panel, 
+but it has prevented timeouts in some cases nonetheless.</p>
+<p>(high-memory-complexity)=</p>
+<h4>Dealing with high memory (or storage) complexity</h4>
+<p>The memory complexity of each rule or parametric rule is displayed in the Live
+Statistics panel in the Certora Prover reports. </p>
+<p>% if we would want to slim it down to graph size only, we could write this:
+% Memory complexity is measured by
+% the <em>number of updates</em> statistic. This statistic indicates how often an update
+% to memory is performed anywhere in the rule. Note that any form of memory, i.e.
+%  EVM memory, EVM storage, ghost variables, or ghost functions, is counted here.
+% This number gives rough estimate of how much work the SMT solvers have to do to
+% reason about (non-)aliasing of memory references.</p>
+<p>The Certora Prover performs a decompilation of bytecode in a way that all EVM
+primitives can ultimately be modeled as SMT constructs. This process introduces
+key-to-value mappings for EVM memory and EVM storage. Additionally the CVL
+specification may introduce ghost mappings. The Prover runs static analyses to
+reduce the load on these mappings by splitting them into smaller pieces,
+(smaller mappings or scalar variables), but this is not always possible and some
+mappings usually remain in the final SMT formula.</p>
+<p>Under this model, the "#total updates" is a measure of how many times we store
+into a key-value mapping such as memory, storage, or a ghost function. The
+"longest update sequence" statistic represents the length the longest sequence
+of updates (i.e. store operations) performed on one of the mappings. In both
+cases, a smaller number indicates a less difficult problem for the Prover to
+solve.</p>
+<p>% :align: center
+<code>{figure} memory-complexity-field.png
+:name: memory complexity field
+:height: 90px
+Entry in the Live Statistics panel indicating memory complexity
+</code></p>
+<p>In the following we consider common culprits for high memory complexity.</p>
+<h5>Passing complex structs</h5>
+<p>One common reason for high memory complexity are complex data structures that
+are passed from the specification to the program, or also inside the program.
+<code>struct</code> types that contain many dynamically-sized arrays are especially
+problematic. </p>
+<p>% TODO: which calls exactly? external calls? all of them?</p>
+<p>```cvl
+rule myRule() {
+    MyStruct x;
+    foo(x);</p>
+<p>}
+```</p>
+<p>```solidity
+struct MyStruct {
+    // several dynamically-sized arrays
+    bytes b;
+    string s;
+    uint[] u1;
+    uint8[] u2;
+}</p>
+<p>function foo(MyStruct x) public {
+    ...
+}
+```</p>
+<p>In this case, it can help to identify fields of the struct that are not relevant
+for the property of the program that is currently being reasoned about and
+comment out those fields. In our experience these fields exist relatively often
+especially in large structs. Naturally, the removal might be complicated by the
+fact that all usages of these fields also need some munging steps applied to
+them.</p>
+<h5>Memory and storage in inline assembly</h5>
+<p>The Certora Prover employs <a href="storage-and-memory-analysis">static analyses and
+simplifications</a> in order to make the reasoning
+about Storage and Memory easier for the SMT solvers. These static analyses are
+sometimes thrown off by unusual code patterns (most often produced when using
+inline assembly), which can make the SMT formulas too hard to solve. </p>
+<p>CVT reports these failures of Storage or Memory analysis in the Global Problems
+pane of the reports, along with pointers to the offending source code positions
+ (typically inline assembly containing <code>sstore</code>/<code>sload</code>/<code>mstore</code>/<code>mload</code>
+ operations). To resolve such failures, the relevant code parts need to be
+summarized or munged. (Naturally, the Certora developers are working make such
+failures less frequent as well.)</p>
+<p>(modular-verification)=</p>
+<h3>Modular verification</h3>
+<p>Often it is useful to break a complex problem into simpler subproblems; this
+process is called modularization. You can modularize a verification problem by
+first proving a property about a complex piece of code (such as a library or a
+method) and then using that property to summarize the complex code.  In the
+following we elaborate on modularization techniques that can help with timeout
+prevention.</p>
+<p>(library_timeouts)=</p>
+<h4>Library-based systems</h4>
+<p>As mentioned here <a href="timeout-causes-library-contracts">before</a>, systems with
+libraries are a natural candidate for modularization.</p>
+<p>Alternatively to using the <code>-summarizeExtLibraryCallsAsNonDetPreLinking true</code>
+option mentioned before, one can summarize all the methods of a single library
+using a {ref}<code>catch-all summary &lt;catch-all-entries&gt;</code>.  For example, to use a
+<code>NONDET</code> summary for all functions of <code>MyBigLibrary</code>, one could add the
+following:</p>
+<p><code>
+methods {
+    function MyBigLibrary._ external =&gt; NONDET;
+    function MyBigLibrary._ internal =&gt; NONDET;
+}
+</code></p>
+<p>The above snippet has the effect of summarizing as <code>NONDET</code> all external calls
+to the library and <em>internal</em> ones as well. Only <code>NONDET</code> and <code>HAVOC</code> summaries
+can be applied. 
+For more information on method summaries, see {ref}<code>summaries</code>.</p>
+<p>(timeout-cli-options)=</p>
+<h3>Command line options</h3>
+<p>There are a number of command line options that influence specific parts of the
+Prover's pipeline. While their default values generally yield the best results,
+changing them is known to improve running time in certain cases.</p>
+<h4><code>--prover_args '-calltraceFreeOpt true'</code></h4>
+<p>This option allows for some rather aggressive simplifications. However, it
+possibly breaks call trace generation.</p>
+</body></html>

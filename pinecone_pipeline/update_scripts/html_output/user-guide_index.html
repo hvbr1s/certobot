@@ -1,0 +1,85 @@
+<p>(user-guide)=</p>
+<h1>Certora User's Guide</h1>
+<p>This User Guide contains information about the Certora Prover and Certora
+Verification Language.  It is intended to explain how to use the Prover to
+verify smart contracts.  It is organized by topic and focuses on the most
+useful features instead of including comprehensive details.  For details, see
+the {doc}<code>/docs/cvl/index</code>.</p>
+<p>The Certora Prover is based on well-studied techniques from the formal
+verification community. <em><strong>Specifications</strong></em> define a set of rules that call
+into the contract under analysis and make various assertions about its
+behavior. Together with the contract under analysis, these rules are compiled
+to a logical formula called a {term}<code>verification condition</code>, which is then
+proved or disproved by an {term}<code>SMT solver</code>. If the rule is disproved, the
+solver also provides a concrete test case demonstrating the violation.</p>
+<p>The rules of the specification play a crucial role in the analysis. Without
+adequate rules, only very basic properties can be checked (e.g., no assertions
+in the contract itself are violated). To effectively use Certora Prover, users
+must write rules that describe the high-level properties they wish to verify on
+their contracts. This user manual describes the different features of the
+specification language. Another primary goal is to help the reader learn how to
+think about and write high-level properties.</p>
+<p>```{toctree}
+:maxdepth: 1</p>
+<p>tutorials.md
+install.md
+ci.rst
+running.rst
+properties/index.md
+satisfy.md
+invariants.rst
+parametric.rst
+ghosts.md
+patterns/index.md
+opcodes.md
+multicontract/index.md
+out-of-resources/index.md
+gaps.md
+checking.md
+glossary.md
+```</p>
+<html><head><meta content="https://github.com/Certora/Documentation/user-guide/index.md" name="source"/><meta content="https://github.com/Certora/Documentation/user-guide/index.md" name="url"/><meta content="No Title Found" name="title"/><meta content="(user-guide)=
+Certora User's Guide
+This User Guide contains information about the Certora Prover and Certora
+Verification Language.  It is intended to explain how to use the Prover to
+verify smart con" name="text"/></head><body><div style="background-color: #f0f0f0; padding: 10px; margin-bottom: 20px;">Source: https://github.com/Certora/Documentation/user-guide/index.md</div><p>(user-guide)=</p>
+<h1>Certora User's Guide</h1>
+<p>This User Guide contains information about the Certora Prover and Certora
+Verification Language.  It is intended to explain how to use the Prover to
+verify smart contracts.  It is organized by topic and focuses on the most
+useful features instead of including comprehensive details.  For details, see
+the {doc}<code>/docs/cvl/index</code>.</p>
+<p>The Certora Prover is based on well-studied techniques from the formal
+verification community. <em><strong>Specifications</strong></em> define a set of rules that call
+into the contract under analysis and make various assertions about its
+behavior. Together with the contract under analysis, these rules are compiled
+to a logical formula called a {term}<code>verification condition</code>, which is then
+proved or disproved by an {term}<code>SMT solver</code>. If the rule is disproved, the
+solver also provides a concrete test case demonstrating the violation.</p>
+<p>The rules of the specification play a crucial role in the analysis. Without
+adequate rules, only very basic properties can be checked (e.g., no assertions
+in the contract itself are violated). To effectively use Certora Prover, users
+must write rules that describe the high-level properties they wish to verify on
+their contracts. This user manual describes the different features of the
+specification language. Another primary goal is to help the reader learn how to
+think about and write high-level properties.</p>
+<p>```{toctree}
+:maxdepth: 1</p>
+<p>tutorials.md
+install.md
+ci.rst
+running.rst
+properties/index.md
+satisfy.md
+invariants.rst
+parametric.rst
+ghosts.md
+patterns/index.md
+opcodes.md
+multicontract/index.md
+out-of-resources/index.md
+gaps.md
+checking.md
+glossary.md
+```</p>
+</body></html>

@@ -1,0 +1,130 @@
+<h1>Uninterpreted Sorts</h1>
+<p>CVL specifications support both Solidity primitives (<code>uint256</code>, <code>address</code>, etc.) and custom types (e.g., <code>mathint</code>). Solidity types are <em>interpreted</em>, meaning they have specific semantics, such as arithmetic or comparison operations. However, in some cases, it is beneficial to use <em>uninterpreted sorts</em>, which do not carry the semantics associated with interpretation.</p>
+<h2>Syntax for Uninterpreted Sorts</h2>
+<p>To declare an uninterpreted sort in CVL, use the following syntax:</p>
+<p><code>cvl
+sort MyUninterpSort;
+sort Foo;
+</code></p>
+<p>These uninterpreted sorts can be utilized in various ways within a CVL specification:</p>
+<ol>
+<li><p><strong>Declare Variables:</strong>
+<code>cvl
+Foo x;
+</code></p></li>
+<li><p><strong>Test Equality:</strong>
+<code>cvl
+Foo x; 
+Foo y; 
+assert x == y;
+</code></p></li>
+<li><p><strong>Use in Signatures:</strong>
+<code>cvl
+ghost myGhost(uint256, Foo) returns Foo;
+</code></p></li>
+</ol>
+<h2>Example Usage</h2>
+<p>Consider the following example:</p>
+<p>```cvl
+sort Foo;</p>
+<p>ghost bar(Foo, Foo) returns Foo;</p>
+<p>rule myRule {
+   Foo x;
+   Foo y;
+   Foo z = bar(x, y);
+   assert x == y &amp;&amp; y == z;
+}
+```</p>
+<p>This example demonstrates the use of an uninterpreted sort <code>Foo</code>. The <code>bar</code> ghost function takes two arguments of type <code>Foo</code> and returns a value of the same type. The <code>myRule</code> rule declares variables <code>x</code>, <code>y</code>, and <code>z</code>, and asserts that they are all equal.</p>
+<h2>Using Uninterpreted Sorts with Ghosts</h2>
+<p>Uninterpreted sorts can also be employed in ghosts, as shown in the following example:</p>
+<p>```cvl
+ghost mapping(uint256 =&gt; Node) toNode;
+ghost mapping(Node =&gt; mapping(Node =&gt; bool)) reach {
+  // Axioms for reachability relation
+  axiom forall Node X. reach[X][X];
+  axiom forall Node X. forall Node Y.
+      reach[X][Y] &amp;&amp; reach[Y][X] =&gt; X == Y;
+  axiom forall Node X. forall Node Y. forall Node Z.
+      reach[X][Y] &amp;&amp; reach[Y][Z] =&gt; reach[X][Z];
+  axiom forall Node X. forall Node Y. forall Node Z.
+      reach[X][Y] &amp;&amp; reach[X][Z] =&gt; (reach[Y][Z] || reach[Z][Y]);
+}</p>
+<p>definition isSucc(Node a, Node b) returns bool =
+    // Definition for successor relationship
+   reach[a][b] &amp;&amp; a != b &amp;&amp;
+      (forall Node X. reach[a][X] &amp;&amp; reach[X][b] =&gt; (a == X || b == X));</p>
+<p>rule checkGetSucc {
+  uint256 key;
+  uint256 afterKey = getSucc(key);
+  assert reach[toNode[key]][toNode[afterKey]];
+}
+```</p>
+<p>This example demonstrates the use of uninterpreted sorts (<code>Node</code>) in ghost mappings and functions, emphasizing their application in specifying relationships and properties without being bound by specific interpretations.</p>
+<p>In summary, uninterpreted sorts in CVL provide a versatile tool for declaring abstract types and relationships, allowing for greater expressiveness in specification design.</p>
+<html><head><meta content="https://github.com/Certora/Documentation/cvl/sorts.md" name="source"/><meta content="https://github.com/Certora/Documentation/cvl/sorts.md" name="url"/><meta content="Uninterpreted Sorts" name="title"/><meta content="Uninterpreted Sorts
+CVL specifications support both Solidity primitives (uint256, address, etc.) and custom types (e.g., mathint). Solidity types are interpreted, meaning they have specific semantics," name="text"/></head><body><div style="background-color: #f0f0f0; padding: 10px; margin-bottom: 20px;">Source: https://github.com/Certora/Documentation/cvl/sorts.md</div><h1>Uninterpreted Sorts</h1>
+<p>CVL specifications support both Solidity primitives (<code>uint256</code>, <code>address</code>, etc.) and custom types (e.g., <code>mathint</code>). Solidity types are <em>interpreted</em>, meaning they have specific semantics, such as arithmetic or comparison operations. However, in some cases, it is beneficial to use <em>uninterpreted sorts</em>, which do not carry the semantics associated with interpretation.</p>
+<h2>Syntax for Uninterpreted Sorts</h2>
+<p>To declare an uninterpreted sort in CVL, use the following syntax:</p>
+<p><code>cvl
+sort MyUninterpSort;
+sort Foo;
+</code></p>
+<p>These uninterpreted sorts can be utilized in various ways within a CVL specification:</p>
+<ol>
+<li><p><strong>Declare Variables:</strong>
+<code>cvl
+Foo x;
+</code></p></li>
+<li><p><strong>Test Equality:</strong>
+<code>cvl
+Foo x; 
+Foo y; 
+assert x == y;
+</code></p></li>
+<li><p><strong>Use in Signatures:</strong>
+<code>cvl
+ghost myGhost(uint256, Foo) returns Foo;
+</code></p></li>
+</ol>
+<h2>Example Usage</h2>
+<p>Consider the following example:</p>
+<p>```cvl
+sort Foo;</p>
+<p>ghost bar(Foo, Foo) returns Foo;</p>
+<p>rule myRule {
+   Foo x;
+   Foo y;
+   Foo z = bar(x, y);
+   assert x == y &amp;&amp; y == z;
+}
+```</p>
+<p>This example demonstrates the use of an uninterpreted sort <code>Foo</code>. The <code>bar</code> ghost function takes two arguments of type <code>Foo</code> and returns a value of the same type. The <code>myRule</code> rule declares variables <code>x</code>, <code>y</code>, and <code>z</code>, and asserts that they are all equal.</p>
+<h2>Using Uninterpreted Sorts with Ghosts</h2>
+<p>Uninterpreted sorts can also be employed in ghosts, as shown in the following example:</p>
+<p>```cvl
+ghost mapping(uint256 =&gt; Node) toNode;
+ghost mapping(Node =&gt; mapping(Node =&gt; bool)) reach {
+  // Axioms for reachability relation
+  axiom forall Node X. reach[X][X];
+  axiom forall Node X. forall Node Y.
+      reach[X][Y] &amp;&amp; reach[Y][X] =&gt; X == Y;
+  axiom forall Node X. forall Node Y. forall Node Z.
+      reach[X][Y] &amp;&amp; reach[Y][Z] =&gt; reach[X][Z];
+  axiom forall Node X. forall Node Y. forall Node Z.
+      reach[X][Y] &amp;&amp; reach[X][Z] =&gt; (reach[Y][Z] || reach[Z][Y]);
+}</p>
+<p>definition isSucc(Node a, Node b) returns bool =
+    // Definition for successor relationship
+   reach[a][b] &amp;&amp; a != b &amp;&amp;
+      (forall Node X. reach[a][X] &amp;&amp; reach[X][b] =&gt; (a == X || b == X));</p>
+<p>rule checkGetSucc {
+  uint256 key;
+  uint256 afterKey = getSucc(key);
+  assert reach[toNode[key]][toNode[afterKey]];
+}
+```</p>
+<p>This example demonstrates the use of uninterpreted sorts (<code>Node</code>) in ghost mappings and functions, emphasizing their application in specifying relationships and properties without being bound by specific interpretations.</p>
+<p>In summary, uninterpreted sorts in CVL provide a versatile tool for declaring abstract types and relationships, allowing for greater expressiveness in specification design.</p>
+</body></html>

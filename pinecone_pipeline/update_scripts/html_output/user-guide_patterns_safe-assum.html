@@ -1,0 +1,152 @@
+<h1>Listing Safe Assumptions</h1>
+<p>The "Listing Safe Assumptions" design pattern introduces a structured approach to document and validate essential assumptions. Let's delve into the importance of this design pattern using the provided example.</p>
+<p>```cvl
+methods {
+    function isSigned(address _addr, bytes32 msgHash, uint8 v, bytes32 r, bytes32 s) external returns (bool) envfree;
+    function executeMyFunctionFromSignature(uint8 v, bytes32 r, bytes32 s, address owner, uint256 myParam, uint256 deadline) external;
+    function getHash(address owner, uint256 myParam, uint256 deadline) external returns(bytes32) envfree;
+}</p>
+<p>/<em>*</em> # ecrecover properties:</p>
+<h1>1. zero value:</h1>
+<pre><code>    ecrecover(0, v, r, s) == 0
+</code></pre>
+<h1>2. deterministic</h1>
+<pre><code>    ecrecover(msgHash, v, r, s) == _addr on different calls.
+</code></pre>
+<h1>3. uniqueness of signature</h1>
+<pre><code>    ecrecover(msgHash, v, r, s) != 0 =&gt; ecrecover(msgHash', v, r, s) == 0
+    where msgHash' != msgHash
+</code></pre>
+<h1>4. Dependency on r and s</h1>
+<pre><code>    ecrecover(msgHash, v, r, s) != 0 =&gt; ecrecover(msgHash, v, r', s) == 0
+    where r' != r
+    ecrecover(msgHash, v, r, s) != 0 =&gt; ecrecover(msgHash, v, r, s') == 0
+    where s' != s
+</code></pre>
+<p>**/</p>
+<p>function ecrecoverAxioms() {
+  // zero value:
+  require (forall uint8 v. forall bytes32 r. forall bytes32 s. ecrecover(to_bytes32(0), v, r, s) == 0);
+  // uniqueness of signature
+  require (forall uint8 v. forall bytes32 r. forall bytes32 s. forall bytes32 h1. forall bytes32 h2.
+    h1 != h2 =&gt; ecrecover(h1, v, r, s) != 0 =&gt; ecrecover(h2, v, r, s) == 0);
+  // dependency on r and s
+  require (forall bytes32 h. forall uint8 v. forall bytes32 s. forall bytes32 r1. forall bytes32 r2.
+    r1 != r2 =&gt; ecrecover(h, v, r1, s) != 0 =&gt; ecrecover(h, v, r2, s) == 0);
+  require (forall bytes32 h. forall uint8 v. forall bytes32 r. forall bytes32 s1. forall bytes32 s2.
+    s1 != s2 =&gt; ecrecover(h, v, r, s1) != 0 =&gt; ecrecover(h, v, r, s2) == 0);
+}</p>
+<p>rule ownerSignatureIsUnique () {
+    ecrecoverAxioms();
+    bytes32 msgHashA; bytes32 msgHashB;
+    uint8 v; bytes32 r; bytes32 s; 
+    address addr; 
+    require msgHashA != msgHashB; 
+    require addr != 0;
+    assert isSigned(addr, msgHashA, v, r, s ) =&gt; !isSigned(addr, msgHashB, v, r, s );
+}</p>
+<p>invariant zero<em>message(uint8 v, bytes32 r, bytes32 s)
+    ecrecover(to</em>bytes32(0), v, r, s) == 0;
+    { 
+        preserved {
+            ecrecoverAxioms();
+        }
+    } 
+```</p>
+<h2>Context:</h2>
+<p>In the example, we focus on the <code>ecrecover</code> function used for signature verification. The objective is to articulate and validate key assumptions associated with this function to bolster the security of smart contracts.</p>
+<h2>Importance of Listing Safe Assumptions:</h2>
+<ol>
+<li><p><strong>Clarity and Documentation:</strong></p>
+<ul>
+<li>The design pattern begins by explicitly listing assumptions related to the <code>ecrecover</code> function. This serves as clear documentation for developers, auditors, and anyone reviewing the spec. Clarity in assumptions enhances the understanding of expected behavior.</li>
+</ul></li>
+<li><p><strong>Preventing Unexpected Behavior:</strong></p>
+<ul>
+<li>The axioms established in the example, such as the zero message axiom and uniqueness of signature axiom, act as preventive measures against unexpected behavior. They set clear expectations for how the <code>ecrecover</code> function should behave under different circumstances, neglect all the counter-examples that are not relevant to the function intended behavior.</li>
+</ul></li>
+<li><p><strong>Easy To Use:</strong></p>
+<ul>
+<li>By encapsulating assumptions within the CVL function, this design pattern allow us to easily use those assumptions in any rule or invariant we desire.</li>
+</ul></li>
+</ol>
+<p>In conclusion, the "Listing Safe Assumptions" design pattern, exemplified through the <code>ecrecover</code> function in the provided example, 
+serves a broader purpose in specs writing. It systematically documents assumptions, prevents unexpected behaviors, 
+and offers ease of use throughout the rules and invariants.</p>
+<html><head><meta content="https://github.com/Certora/Documentation/user-guide/patterns/safe-assum.md" name="source"/><meta content="https://github.com/Certora/Documentation/user-guide/patterns/safe-assum.md" name="url"/><meta content="Listing Safe Assumptions" name="title"/><meta content="Listing Safe Assumptions
+The &quot;Listing Safe Assumptions&quot; design pattern introduces a structured approach to document and validate essential assumptions. Let's delve into the importance of this design p" name="text"/></head><body><div style="background-color: #f0f0f0; padding: 10px; margin-bottom: 20px;">Source: https://github.com/Certora/Documentation/user-guide/patterns/safe-assum.md</div><h1>Listing Safe Assumptions</h1>
+<p>The "Listing Safe Assumptions" design pattern introduces a structured approach to document and validate essential assumptions. Let's delve into the importance of this design pattern using the provided example.</p>
+<p>```cvl
+methods {
+    function isSigned(address _addr, bytes32 msgHash, uint8 v, bytes32 r, bytes32 s) external returns (bool) envfree;
+    function executeMyFunctionFromSignature(uint8 v, bytes32 r, bytes32 s, address owner, uint256 myParam, uint256 deadline) external;
+    function getHash(address owner, uint256 myParam, uint256 deadline) external returns(bytes32) envfree;
+}</p>
+<p>/<em>*</em> # ecrecover properties:</p>
+<h1>1. zero value:</h1>
+<pre><code>    ecrecover(0, v, r, s) == 0
+</code></pre>
+<h1>2. deterministic</h1>
+<pre><code>    ecrecover(msgHash, v, r, s) == _addr on different calls.
+</code></pre>
+<h1>3. uniqueness of signature</h1>
+<pre><code>    ecrecover(msgHash, v, r, s) != 0 =&gt; ecrecover(msgHash', v, r, s) == 0
+    where msgHash' != msgHash
+</code></pre>
+<h1>4. Dependency on r and s</h1>
+<pre><code>    ecrecover(msgHash, v, r, s) != 0 =&gt; ecrecover(msgHash, v, r', s) == 0
+    where r' != r
+    ecrecover(msgHash, v, r, s) != 0 =&gt; ecrecover(msgHash, v, r, s') == 0
+    where s' != s
+</code></pre>
+<p>**/</p>
+<p>function ecrecoverAxioms() {
+  // zero value:
+  require (forall uint8 v. forall bytes32 r. forall bytes32 s. ecrecover(to_bytes32(0), v, r, s) == 0);
+  // uniqueness of signature
+  require (forall uint8 v. forall bytes32 r. forall bytes32 s. forall bytes32 h1. forall bytes32 h2.
+    h1 != h2 =&gt; ecrecover(h1, v, r, s) != 0 =&gt; ecrecover(h2, v, r, s) == 0);
+  // dependency on r and s
+  require (forall bytes32 h. forall uint8 v. forall bytes32 s. forall bytes32 r1. forall bytes32 r2.
+    r1 != r2 =&gt; ecrecover(h, v, r1, s) != 0 =&gt; ecrecover(h, v, r2, s) == 0);
+  require (forall bytes32 h. forall uint8 v. forall bytes32 r. forall bytes32 s1. forall bytes32 s2.
+    s1 != s2 =&gt; ecrecover(h, v, r, s1) != 0 =&gt; ecrecover(h, v, r, s2) == 0);
+}</p>
+<p>rule ownerSignatureIsUnique () {
+    ecrecoverAxioms();
+    bytes32 msgHashA; bytes32 msgHashB;
+    uint8 v; bytes32 r; bytes32 s; 
+    address addr; 
+    require msgHashA != msgHashB; 
+    require addr != 0;
+    assert isSigned(addr, msgHashA, v, r, s ) =&gt; !isSigned(addr, msgHashB, v, r, s );
+}</p>
+<p>invariant zero<em>message(uint8 v, bytes32 r, bytes32 s)
+    ecrecover(to</em>bytes32(0), v, r, s) == 0;
+    { 
+        preserved {
+            ecrecoverAxioms();
+        }
+    } 
+```</p>
+<h2>Context:</h2>
+<p>In the example, we focus on the <code>ecrecover</code> function used for signature verification. The objective is to articulate and validate key assumptions associated with this function to bolster the security of smart contracts.</p>
+<h2>Importance of Listing Safe Assumptions:</h2>
+<ol>
+<li><p><strong>Clarity and Documentation:</strong></p>
+<ul>
+<li>The design pattern begins by explicitly listing assumptions related to the <code>ecrecover</code> function. This serves as clear documentation for developers, auditors, and anyone reviewing the spec. Clarity in assumptions enhances the understanding of expected behavior.</li>
+</ul></li>
+<li><p><strong>Preventing Unexpected Behavior:</strong></p>
+<ul>
+<li>The axioms established in the example, such as the zero message axiom and uniqueness of signature axiom, act as preventive measures against unexpected behavior. They set clear expectations for how the <code>ecrecover</code> function should behave under different circumstances, neglect all the counter-examples that are not relevant to the function intended behavior.</li>
+</ul></li>
+<li><p><strong>Easy To Use:</strong></p>
+<ul>
+<li>By encapsulating assumptions within the CVL function, this design pattern allow us to easily use those assumptions in any rule or invariant we desire.</li>
+</ul></li>
+</ol>
+<p>In conclusion, the "Listing Safe Assumptions" design pattern, exemplified through the <code>ecrecover</code> function in the provided example, 
+serves a broader purpose in specs writing. It systematically documents assumptions, prevents unexpected behaviors, 
+and offers ease of use throughout the rules and invariants.</p>
+</body></html>

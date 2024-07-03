@@ -1,0 +1,129 @@
+<h1>Ghosts</h1>
+<h2>What are ghosts?</h2>
+<p>At their core, ghosts are just {ref}<code>uninterpreted functions &lt;uninterp-functions&gt;</code>. These uninterpreted functions by themselves wouldn't really be "ghosts" per se. However, along with <strong>axioms</strong> and <strong>hooks</strong>, these uninterpreted functions can be used to model some contract state that isn't explicitly in the contract (hence it is a “ghost” state). In our canonical example, we use ghosts to keep track of the sum of balances in a bank contract.</p>
+<h2>A Simple Bank Example</h2>
+<p>Consider the following <code>Bank</code> contract:</p>
+<p>```solidity
+contract Bank {
+  mapping (address =&gt; uint256) balances;
+  uint256 public totalSupply;</p>
+<p>function deposit(address a, uint256 amount) public {
+    // also prevents overflow on account[a].balance, since that's &lt;= totalSupply
+    require(totalSupply + amount &gt;= amount);
+    balances[a] += amount;
+    totalSupply += amount;
+  }</p>
+<p>function withdraw(address a, uint256 amount) public {
+    require(balances[a] &gt;= amount);
+    balances[a] -= amount;
+    totalSupply -= amount;
+  }</p>
+<p>function payday(address[] memory payees) public {
+    for (uint i = 0; i &lt; payees.length; i++) {
+      deposit(payees[i], 1);
+    }
+  }
+}
+```</p>
+<p>The state of the contract consists of <code>totalSupply</code> and <code>balances</code> where <code>balances</code> keeps track of the balance in each account and <code>totalSupply</code> keeps track of the sum of all balances. Now let's suppose that we don't trust that <code>totalSupply</code>gets updated correctly. We can introduce a ghost function to keep track of the sum and then compare that ghost function with <code>totalSupply</code> to see if they both got updated as expected. Here's what that looks like:</p>
+<p>```cvl
+// declare the ghost function
+ghost ghostSupply() returns uint256;
+// the hook that updates the ghost function as follows
+// "At every write to the value at key 'a' in 'balances'
+// increase ghostTotalSupply by the difference between
+// tho old value and the new value"
+//                              the new value ↓ written:
+hook Sstore balances[KEY address a] uint256 balance
+// the old value ↓ already there
+    (uint256 old<em>balance) {
+  havoc ghostSupply assuming ghostSupply@new() == ghostSupply@old() +
+      (balance - old</em>balance);
+}</p>
+<p>rule totalSupplyInvariant(method f) {
+  require totalSupply() == ghostSupply();
+  calldataarg arg;
+  env e;
+  sinvoke f(e, arg);
+  assert totalSupply() == ghostSupply();
+}
+```</p>
+<p>There are a few things going on here.</p>
+<ol>
+<li><p>We declared <code>ghost ghostSupply() returns uint256</code>. This creates an uninterpreted function called <code>ghostSupply</code>that takes 0 arguments and returns a <code>uint256</code>. Notice that this is in a global scope. Each rule will get its own version of this uninterpreted function, but this way, it doesn't have to be written several times.</p></li>
+<li><p>We declared a <code>hook</code>. This hook tells the tool to analyze the rule and find every <code>Sstore</code> (write) to an entry in <code>balances</code>. It binds the <em>stored value</em> to the name <code>balance</code> and the <em>old value</em> to the name <code>old_balance</code>.</p></li>
+<li><p>We defined a <em>ghost update</em> inside the <em>body</em> of the hook. We used a <code>havoc
+assuming</code> statement to mutate the ghost function. The <code>havoc
+assuming</code> statement --- in this case <code>havoc ghostSupply
+assuming</code> binds <code>ghostSupply@new()</code>, the havoced version,
+and <code>ghostSupply@old()</code> the previous version. <code>ghostSupply</code> does not exist
+to the right of <code>assuming</code>. We then constrain the new version in terms of
+the old.</p></li>
+</ol>
+<p>When all of these work in conjunction, the Prover successfully proves the rule <code>totalSupplyInvariant</code>.</p>
+<html><head><meta content="https://github.com/Certora/Documentation/confluence/anatomy/ghosts.md" name="source"/><meta content="https://github.com/Certora/Documentation/confluence/anatomy/ghosts.md" name="url"/><meta content="No Title Found" name="title"/><meta content="Ghosts
+What are ghosts?
+At their core, ghosts are just {ref}uninterpreted functions &lt;uninterp-functions&gt;. These uninterpreted functions by themselves wouldn't really be &quot;ghosts&quot; per se. However, along" name="text"/></head><body><div style="background-color: #f0f0f0; padding: 10px; margin-bottom: 20px;">Source: https://github.com/Certora/Documentation/confluence/anatomy/ghosts.md</div><h1>Ghosts</h1>
+<h2>What are ghosts?</h2>
+<p>At their core, ghosts are just {ref}<code>uninterpreted functions &lt;uninterp-functions&gt;</code>. These uninterpreted functions by themselves wouldn't really be "ghosts" per se. However, along with <strong>axioms</strong> and <strong>hooks</strong>, these uninterpreted functions can be used to model some contract state that isn't explicitly in the contract (hence it is a “ghost” state). In our canonical example, we use ghosts to keep track of the sum of balances in a bank contract.</p>
+<h2>A Simple Bank Example</h2>
+<p>Consider the following <code>Bank</code> contract:</p>
+<p>```solidity
+contract Bank {
+  mapping (address =&gt; uint256) balances;
+  uint256 public totalSupply;</p>
+<p>function deposit(address a, uint256 amount) public {
+    // also prevents overflow on account[a].balance, since that's &lt;= totalSupply
+    require(totalSupply + amount &gt;= amount);
+    balances[a] += amount;
+    totalSupply += amount;
+  }</p>
+<p>function withdraw(address a, uint256 amount) public {
+    require(balances[a] &gt;= amount);
+    balances[a] -= amount;
+    totalSupply -= amount;
+  }</p>
+<p>function payday(address[] memory payees) public {
+    for (uint i = 0; i &lt; payees.length; i++) {
+      deposit(payees[i], 1);
+    }
+  }
+}
+```</p>
+<p>The state of the contract consists of <code>totalSupply</code> and <code>balances</code> where <code>balances</code> keeps track of the balance in each account and <code>totalSupply</code> keeps track of the sum of all balances. Now let's suppose that we don't trust that <code>totalSupply</code>gets updated correctly. We can introduce a ghost function to keep track of the sum and then compare that ghost function with <code>totalSupply</code> to see if they both got updated as expected. Here's what that looks like:</p>
+<p>```cvl
+// declare the ghost function
+ghost ghostSupply() returns uint256;
+// the hook that updates the ghost function as follows
+// "At every write to the value at key 'a' in 'balances'
+// increase ghostTotalSupply by the difference between
+// tho old value and the new value"
+//                              the new value ↓ written:
+hook Sstore balances[KEY address a] uint256 balance
+// the old value ↓ already there
+    (uint256 old<em>balance) {
+  havoc ghostSupply assuming ghostSupply@new() == ghostSupply@old() +
+      (balance - old</em>balance);
+}</p>
+<p>rule totalSupplyInvariant(method f) {
+  require totalSupply() == ghostSupply();
+  calldataarg arg;
+  env e;
+  sinvoke f(e, arg);
+  assert totalSupply() == ghostSupply();
+}
+```</p>
+<p>There are a few things going on here.</p>
+<ol>
+<li><p>We declared <code>ghost ghostSupply() returns uint256</code>. This creates an uninterpreted function called <code>ghostSupply</code>that takes 0 arguments and returns a <code>uint256</code>. Notice that this is in a global scope. Each rule will get its own version of this uninterpreted function, but this way, it doesn't have to be written several times.</p></li>
+<li><p>We declared a <code>hook</code>. This hook tells the tool to analyze the rule and find every <code>Sstore</code> (write) to an entry in <code>balances</code>. It binds the <em>stored value</em> to the name <code>balance</code> and the <em>old value</em> to the name <code>old_balance</code>.</p></li>
+<li><p>We defined a <em>ghost update</em> inside the <em>body</em> of the hook. We used a <code>havoc
+assuming</code> statement to mutate the ghost function. The <code>havoc
+assuming</code> statement --- in this case <code>havoc ghostSupply
+assuming</code> binds <code>ghostSupply@new()</code>, the havoced version,
+and <code>ghostSupply@old()</code> the previous version. <code>ghostSupply</code> does not exist
+to the right of <code>assuming</code>. We then constrain the new version in terms of
+the old.</p></li>
+</ol>
+<p>When all of these work in conjunction, the Prover successfully proves the rule <code>totalSupplyInvariant</code>.</p>
+</body></html>

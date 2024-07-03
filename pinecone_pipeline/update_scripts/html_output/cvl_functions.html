@@ -1,0 +1,68 @@
+<p>(functions-doc)=</p>
+<h1>Functions</h1>
+<p>CVL functions allow you to reuse parts of a specification, such as common assumptions, assertions, 
+or basic calculations. Additionally they can be used for basic calculations and  for <a href="https://github.com/Certora/Examples/blob/bf3255766c28068eea2d0513edb8daca7bcaa206/CVLByExample/function-summary/multi-contract/certora/specs/spec_with_summary.spec#L6">function summaries</a>.</p>
+<h2>Syntax</h2>
+<p>The syntax for CVL functions is given by the following <a href="ebnf-syntax">EBNF grammar</a>:</p>
+<p><code>
+function ::= [ "override" ]
+             "function" id
+             [ "(" params ")" ]
+             [ "returns" type ]
+             block
+</code></p>
+<p>See {doc}<code>basics</code> for the <code>id</code> production, {doc}<code>types</code> for the <code>type</code> production,
+and {doc}<code>statements</code> for the <code>block</code> production.</p>
+<h2>Examples</h2>
+<ul>
+<li><p>Function with a return:
+<code>cvl
+function abs_value_difference(uint256 x, uint256 y) returns uint256 {
+    if (x &lt; y) {
+      return y - x;
+    } else {
+      return x - y;
+    }
+}
+</code></p></li>
+<li><p><a href="https://github.com/Certora/Examples/blob/14668d39a6ddc67af349bc5b82f73db73349ef18/CVLByExample/LiquidityPool/certora/specs/pool.spec#L24">CVL function with no return</a></p></li>
+<li><p><a href="https://github.com/Certora/Examples/blob/be09cf32c55e39f5f5aa8cba1431f9e519b52365/CVLByExample/import/certora/specs/sub.spec#L38">Overriding a function from imported spec</a></p></li>
+</ul>
+<h2>Using CVL functions</h2>
+<p>CVL Function may be called from within a rule, or from within another CVL function.</p>
+<html><head><meta content="https://github.com/Certora/Documentation/cvl/functions.md" name="source"/><meta content="https://github.com/Certora/Documentation/cvl/functions.md" name="url"/><meta content="No Title Found" name="title"/><meta content="(functions-doc)=
+Functions
+CVL functions allow you to reuse parts of a specification, such as common assumptions, assertions, 
+or basic calculations. Additionally they can be used for basic calculatio" name="text"/></head><body><div style="background-color: #f0f0f0; padding: 10px; margin-bottom: 20px;">Source: https://github.com/Certora/Documentation/cvl/functions.md</div><p>(functions-doc)=</p>
+<h1>Functions</h1>
+<p>CVL functions allow you to reuse parts of a specification, such as common assumptions, assertions, 
+or basic calculations. Additionally they can be used for basic calculations and  for <a href="https://github.com/Certora/Examples/blob/bf3255766c28068eea2d0513edb8daca7bcaa206/CVLByExample/function-summary/multi-contract/certora/specs/spec_with_summary.spec#L6">function summaries</a>.</p>
+<h2>Syntax</h2>
+<p>The syntax for CVL functions is given by the following <a href="ebnf-syntax">EBNF grammar</a>:</p>
+<p><code>
+function ::= [ "override" ]
+             "function" id
+             [ "(" params ")" ]
+             [ "returns" type ]
+             block
+</code></p>
+<p>See {doc}<code>basics</code> for the <code>id</code> production, {doc}<code>types</code> for the <code>type</code> production,
+and {doc}<code>statements</code> for the <code>block</code> production.</p>
+<h2>Examples</h2>
+<ul>
+<li><p>Function with a return:
+<code>cvl
+function abs_value_difference(uint256 x, uint256 y) returns uint256 {
+    if (x &lt; y) {
+      return y - x;
+    } else {
+      return x - y;
+    }
+}
+</code></p></li>
+<li><p><a href="https://github.com/Certora/Examples/blob/14668d39a6ddc67af349bc5b82f73db73349ef18/CVLByExample/LiquidityPool/certora/specs/pool.spec#L24">CVL function with no return</a></p></li>
+<li><p><a href="https://github.com/Certora/Examples/blob/be09cf32c55e39f5f5aa8cba1431f9e519b52365/CVLByExample/import/certora/specs/sub.spec#L38">Overriding a function from imported spec</a></p></li>
+</ul>
+<h2>Using CVL functions</h2>
+<p>CVL Function may be called from within a rule, or from within another CVL function.</p>
+</body></html>
